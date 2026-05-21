@@ -1,0 +1,17 @@
+name = "http-sql-d1"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Bind your D1 database. Create one with:
+#   npx wrangler d1 create my_database
+# then paste the database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "my_database"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Auth is intentionally minimal in this example: a single shared bearer token
+# via a Workers secret. Set it with:
+#   npx wrangler secret put HTTP_SQL_TOKEN
+# Production deployments would replace this with JWT verification or a token
+# lookup against a secrets store.

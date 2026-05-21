@@ -1,0 +1,19 @@
+name = "http-sql-do"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Each tenant gets its own DO instance, and each DO has its own SQLite storage.
+# new_sqlite_classes (not new_classes) is what makes the DO SQLite-backed.
+[[durable_objects.bindings]]
+name = "TENANT_DO"
+class_name = "TenantDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TenantDO"]
+
+# Demo-only token -> tenant map. Real deployments swap this for JWT/JWKS
+# verification (Hono has middleware for both).
+[vars]
+TENANT_TOKEN_ALICE = "alice-dev-token"
+TENANT_TOKEN_BOB = "bob-dev-token"
