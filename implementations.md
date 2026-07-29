@@ -15,7 +15,7 @@ A directory of known servers and clients speaking the [http-sql v0.1 spec](./SPE
 | Implementation | Form | Notes |
 |----------------|------|-------|
 | [examples/reference-client.ts](./examples/reference-client.ts) | TypeScript class, ~40 lines | Uses platform `fetch`. No dependencies. |
-| smugglr `http-sql` profile | Rust / WASM | _in flight; tracked in [rafters-studio/smugglr](https://github.com/rafters-studio/smugglr) -- link will land here when the profile ships._ |
+| [smugglr `http-sql` profile](https://github.com/rafters-studio/smugglr) | Rust / WASM | Shipped. `Profile::http_sql` in [rafters-studio/smugglr](https://github.com/rafters-studio/smugglr); emits single-statement request bodies. |
 
 ## Ways into the ecosystem
 
