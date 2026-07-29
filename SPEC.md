@@ -147,7 +147,7 @@ The two cases differ in what persists, and the difference is normative:
 - **Atomic batch** (`atomic: true`) — the transaction rolls back. No statement in the batch has any effect.
 - **Non-atomic batch** (`atomic` absent or `false`) — statements preceding the failing statement have been executed and their effects persist. The failing statement and all statements after it have not been executed. Clients MUST NOT treat a non-atomic batch error as no-statements-applied.
 
-For a non-atomic batch failure the server MUST include `error.statementIndex` (section 7), because it is the only means by which a client can determine how far the batch got. For an atomic batch failure the server SHOULD include it where the underlying engine surfaces it; recovery does not require it, but diagnosis of a long batch does.
+For a non-atomic batch failure the server MUST include `error.statementIndex` (section 7), because it is the only means by which a client can determine how far the batch got. No such obligation applies to an atomic batch failure: nothing persisted, so there is nothing for the client to locate.
 
 ## 7. Error responses
 
@@ -165,7 +165,7 @@ HTTP status: `4xx` or `5xx`.
 
 - `error.code` (REQUIRED, string) — one of the registered codes below, or a vendor-namespaced code (`vendor:<name>`).
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
-- `error.statementIndex` (REQUIRED for non-atomic batch failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. For an atomic batch failure it is RECOMMENDED. MUST be omitted for single-statement requests.
+- `error.statementIndex` (REQUIRED for non-atomic batch failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
 Registered error codes in v0.1:
 
