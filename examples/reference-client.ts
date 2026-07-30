@@ -49,10 +49,13 @@ export class HttpSqlClient {
         code: "internal_error",
         message: `HTTP ${res.status}`,
       };
-      // Section 6.2.1: a non-atomic batch error does NOT mean nothing applied.
-      // Statements before statementIndex persisted. `undefined` means unknown --
-      // never zero, because a caller that reads zero will replay the whole batch.
-      const appliedCount = atomic === undefined ? undefined : atomic ? 0 : err.statementIndex;
+      // Section 6.2.1: a non-atomic batch error does NOT mean nothing applied --
+      // statements before statementIndex persisted. Atomic batches rolled back,
+      // and a failed single statement applied nothing, so both are 0.
+      // `undefined` means exactly one thing: a non-atomic batch whose server
+      // omitted the REQUIRED statementIndex, so how far it got is UNKNOWN.
+      // Never treat that as zero -- a caller reading zero replays applied work.
+      const appliedCount = atomic === false ? err.statementIndex : 0;
 
       throw Object.assign(new Error(err.message), {
         code: err.code,

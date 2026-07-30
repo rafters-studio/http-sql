@@ -142,7 +142,9 @@ A `results` array MUST have the same length as the request `batch`. A server MUS
 
 If a statement in a batch fails, the response is the error envelope in section 7, not a partial `results` array. This holds for both atomic and non-atomic batches.
 
-The two cases differ in what persists, and the difference is normative:
+Servers MUST execute the statements of a non-atomic batch one at a time, in `batch` array order, and MUST stop at the first statement that fails. Without this, `error.statementIndex` does not partition the batch: a server that executed statements concurrently could commit a later statement while an earlier one failed, and the client could conclude nothing about what persisted. Atomic batches carry no ordering obligation, because the transaction makes execution order unobservable.
+
+Given that, the two cases differ in what persists, and the difference is normative:
 
 - **Atomic batch** (`atomic: true`) — the transaction rolls back. No statement in the batch has any effect.
 - **Non-atomic batch** (`atomic` absent or `false`) — statements preceding the failing statement have been executed and their effects persist. The failing statement and all statements after it have not been executed. Clients MUST NOT treat a non-atomic batch error as no-statements-applied.
@@ -215,9 +217,10 @@ A v0.1 conforming server MUST:
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
 5. Honor `atomic: true` on batch requests when not rejected.
-6. On a batch statement failure, return the error envelope rather than a partial `results` array, and include `error.statementIndex` when the batch was non-atomic (section 6.2.1).
-7. Accept the registered parameter types in section 5 (`blob`, `bigint`).
-8. Emit the `X-Http-Sql-Version` response header.
+6. Execute a non-atomic batch sequentially in array order, stopping at the first failure (section 6.2.1).
+7. On a batch statement failure, return the error envelope rather than a partial `results` array, and include `error.statementIndex` when the batch was non-atomic (section 6.2.1).
+8. Accept the registered parameter types in section 5 (`blob`, `bigint`).
+9. Emit the `X-Http-Sql-Version` response header.
 
 A v0.1 conforming server MAY:
 
