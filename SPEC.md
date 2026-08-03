@@ -117,7 +117,7 @@ HTTP status: `200`.
 - `columns` (REQUIRED, array of strings) — the column names of the result, in the order produced by the SQL engine. Empty array for statements that produce no result set (INSERT, UPDATE, DELETE, DDL).
 - `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5. Empty array if no rows.
 - `rowsAffected` (REQUIRED, integer) — the number of rows changed by the statement. `0` for SELECT.
-- `lastInsertId` (OPTIONAL, string, number, or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). `null` when not applicable or not available.
+- `lastInsertId` (OPTIONAL, string or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). Always a string, never a JSON number: when the identifier is an integer it is encoded as a decimal string, consistent with the `bigint` encoding in section 5, so 64-bit ids survive clients whose numbers are IEEE-754 doubles. Text identifiers (a UUID primary key, say) are carried as-is. `null` when not applicable or not available.
 
 The arrays-of-arrays shape (not arrays-of-objects) is normative. It keeps payloads compact, makes column order explicit, and supports duplicate column names from joins.
 
