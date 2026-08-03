@@ -69,6 +69,29 @@ The placeholder syntax itself is the server's, not this spec's: http-sql does no
 
 Servers MAY reject batches that exceed a server-defined statement count with HTTP status `413` and `error.code` of `payload_too_large`.
 
+> **Non-normative note (not part of the v0.1 contract).** The `atomic` obligation above is
+> one-directional, and v0.1 states that asymmetry deliberately rather than by oversight.
+>
+> There is no conforming way to decline. The obligation on `atomic: true` is unqualified
+> here and in section 10.1, and section 7 registers no code meaning "atomicity unavailable."
+> A server that cannot execute batches transactionally is simply non-conforming for batch in
+> v0.1. Even if such a server declined with a `vendor:` code, the signal would not travel:
+> section 7 directs clients to treat unknown codes as the closest registered code by HTTP
+> status family, which collapses the decline into ordinary `bad_request` / `sql_error`
+> semantics.
+>
+> There is also no way to confirm. Section 6.2's batch success envelope carries no atomicity
+> field and section 9 defines no atomicity header, so a `200` is shape-identical whether or
+> not the batch ran in a transaction. A client that sent `atomic: true` cannot verify the
+> obligation was met, and a client whose correctness would depend on that confirmation is
+> better designed as if no transaction exists.
+>
+> Three candidate shapes for closing the gap in a future version — a registered
+> `not_supported` code, an `atomic` echo field in the section 6.2 envelope, and capability
+> advertisement — are recorded in
+> [issue #13](https://github.com/rafters-studio/http-sql/issues/13) and are deliberately out
+> of scope for v0.1.
+
 ## 5. Parameter types
 
 Positional parameters use JSON values. Each JSON value MUST be bound as the server's corresponding SQL type:
@@ -228,7 +251,7 @@ A v0.1 conforming server MUST:
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
-5. Honor `atomic: true` on batch requests when not rejected.
+5. Honor `atomic: true` on batch requests.
 6. Accept the registered parameter types in section 5 (`blob`, `bigint`).
 7. Emit the `X-Http-Sql-Version` response header.
 
