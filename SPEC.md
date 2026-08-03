@@ -115,9 +115,25 @@ HTTP status: `200`.
 ```
 
 - `columns` (REQUIRED, array of strings) — the column names of the result, in the order produced by the SQL engine. Empty array for statements that produce no result set (INSERT, UPDATE, DELETE, DDL).
-- `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5. Empty array if no rows.
+- `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5, subject to the emission rules below. Empty array if no rows.
 - `rowsAffected` (REQUIRED, integer) — the number of rows changed by the statement. `0` for SELECT.
 - `lastInsertId` (OPTIONAL, string, number, or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). `null` when not applicable or not available.
+
+#### Response value encoding
+
+These rules are keyed on the **stored** value the statement produced, not on whatever runtime type the server's database driver handed back for it.
+
+The **JSON-safe integer range** is -(2^53 - 1) through 2^53 - 1 inclusive.
+
+- A server MUST emit an integer outside the JSON-safe integer range as `{"$type": "bigint", "$value": "<decimal digits>"}`.
+- A server MUST emit a binary value as `{"$type": "blob", "$value": "<base64>"}`.
+- A server MUST NOT substitute a lossy representation — a rounded number, a truncated integer, a re-formatted string that does not decode to the stored value — for the tagged form.
+- A server MAY emit the tagged form for any value it could also emit as a JSON primitive, including integers inside the JSON-safe range.
+- A server SHOULD emit values that are exactly representable as JSON primitives as JSON primitives.
+
+The same rules apply to the `rows` of every `results` entry in section 6.2.
+
+Note, non-normative: this is a constraint on the whole server, not only on its encoding layer. A driver that returns a 64-bit integer as a double has already destroyed the value before any encoding step runs, so conformance here is decided by how the database is queried, not by how the result is serialized.
 
 The arrays-of-arrays shape (not arrays-of-objects) is normative. It keeps payloads compact, makes column order explicit, and supports duplicate column names from joins.
 

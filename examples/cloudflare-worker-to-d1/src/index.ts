@@ -126,6 +126,19 @@ function decodeParam(value: unknown): unknown {
   return value;
 }
 
+// Response encoding per SPEC.md section 6.1. This branches on the runtime type
+// D1 returned, which is only sufficient because the value survived the driver.
+//
+// KNOWN NON-CONFORMANCE (spec 6.1, conformance case V-1): D1 stores 64-bit
+// INTEGERs but its Workers binding has no lossless mode -- there is no option,
+// method, or compatibility flag that makes it return a BigInt, so an integer
+// above 2^53 comes back as an already-rounded double and reaches this function
+// as a `number`. The original value is gone before any encoding step runs and
+// this branch cannot recover it. Tracked upstream at
+// https://github.com/cloudflare/workerd/issues/4195 (open). Until that lands,
+// the workaround is at the SQL layer: `SELECT CAST(col AS TEXT)` keeps the
+// digits intact. Applying that automatically would require parsing the caller's
+// SQL and inferring column types, which this example deliberately does not do.
 function encodeValue(value: unknown): unknown {
   if (value instanceof ArrayBuffer) return { $type: "blob", $value: base64Encode(new Uint8Array(value)) };
   if (typeof value === "bigint") return { $type: "bigint", $value: value.toString() };
