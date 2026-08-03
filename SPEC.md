@@ -177,7 +177,7 @@ http-sql v0.1 does not define pagination. Servers SHOULD enforce a server-define
 
 ## 9. Version negotiation
 
-Conforming servers SHOULD include the response header:
+Conforming servers MUST include the response header:
 
 ```
 X-Http-Sql-Version: 0.1
