@@ -1,8 +1,8 @@
-# http-sql v0.1
+# http-sql v0.2
 
 An HTTP wire format for submitting a SQL statement and receiving a result set.
 
-**Status:** Draft, v0.1.
+**Status:** Draft, v0.2.
 **Editor:** [@rafters-studio](https://github.com/rafters-studio)
 **License:** MIT
 
@@ -69,13 +69,12 @@ The placeholder syntax itself is the server's, not this spec's: http-sql does no
 
 Servers MAY reject batches that exceed a server-defined statement count with HTTP status `413` and `error.code` of `payload_too_large`.
 
-> **Non-normative note (not part of the v0.1 contract).** The `atomic` obligation above is
-> one-directional, and v0.1 states that asymmetry deliberately rather than by oversight.
+> **Non-normative note (not part of the normative contract).** The `atomic` obligation above is
+> one-directional, and this spec states that asymmetry deliberately rather than by oversight.
 >
 > There is no conforming way to decline. The obligation on `atomic: true` is unqualified
 > here and in section 10.1, and section 7 registers no code meaning "atomicity unavailable."
-> A server that cannot execute batches transactionally is simply non-conforming for batch in
-> v0.1. Even if such a server declined with a `vendor:` code, the signal would not travel:
+> A server that cannot execute batches transactionally is simply non-conforming for batch. Even if such a server declined with a `vendor:` code, the signal would not travel:
 > section 7 directs clients to treat unknown codes as the closest registered code by HTTP
 > status family, which collapses the decline into ordinary `bad_request` / `sql_error`
 > semantics.
@@ -90,7 +89,7 @@ Servers MAY reject batches that exceed a server-defined statement count with HTT
 > `not_supported` code, an `atomic` echo field in the section 6.2 envelope, and capability
 > advertisement — are recorded in
 > [issue #13](https://github.com/rafters-studio/http-sql/issues/13) and are deliberately out
-> of scope for v0.1.
+> of scope for this version.
 
 ## 5. Parameter types
 
@@ -116,7 +115,7 @@ For values that cannot be represented as a JSON primitive (binary blobs, integer
 - `$type` (REQUIRED, string) — one of the registered types listed below, or a vendor-namespaced type (`vendor:<name>`).
 - `$value` (REQUIRED) — the encoded value as a JSON value.
 
-Registered types in v0.1:
+Registered types in v0.2:
 
 | `$type`  | `$value` encoding                                      |
 |----------|--------------------------------------------------------|
@@ -214,7 +213,7 @@ HTTP status: `4xx` or `5xx`.
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
 - `error.statementIndex` (REQUIRED for non-atomic batch statement failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
-Registered error codes in v0.1:
+Registered error codes in v0.2:
 
 | `code`                   | HTTP | Meaning                                                         |
 |--------------------------|------|-----------------------------------------------------------------|
@@ -228,20 +227,20 @@ Registered error codes in v0.1:
 | `rate_limited`           | 429  | Too many requests.                                              |
 | `internal_error`         | 500  | Server malfunction.                                             |
 
-`unsupported_media_type` is introduced in v0.2. Per section 11, a new registered error code is an additive change that increments the minor version; this spec has no patch level, so the code is not available to a server that advertises `0.1`.
+`unsupported_media_type` was introduced in v0.2 (per section 11, a new registered error code is an additive change that increments the minor version). It is not available to a server that advertises `0.1`.
 
 Vendor codes carry the prefix `vendor:` (e.g. `vendor:cf_d1_quota_exceeded`). Clients SHOULD treat unknown `error.code` values as if they were the closest registered code by HTTP status family.
 
 ## 8. Pagination
 
-http-sql v0.1 does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
+http-sql v0.2 does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
 
 ## 9. Version negotiation
 
 Conforming servers MUST include the response header:
 
 ```
-X-Http-Sql-Version: 0.1
+X-Http-Sql-Version: 0.2
 ```
 
 on every response (including error responses).
@@ -249,16 +248,16 @@ on every response (including error responses).
 Clients MAY send the request header:
 
 ```
-X-Http-Sql-Accept-Version: 0.1
+X-Http-Sql-Accept-Version: 0.2
 ```
 
-to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior. v0.1 servers ignore the header.
+to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior. v0.2 servers ignore the header.
 
 ## 10. Conformance
 
 ### 10.1 Server conformance
 
-A v0.1 conforming server MUST:
+A v0.2 conforming server MUST:
 
 1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs, and reject other media types per section 2.
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
@@ -270,14 +269,14 @@ A v0.1 conforming server MUST:
 8. Accept the registered parameter types in section 5 (`blob`, `bigint`).
 9. Emit the `X-Http-Sql-Version` response header.
 
-A v0.1 conforming server MAY:
+A v0.2 conforming server MAY:
 
 - Accept additional vendor-namespaced parameter types or error codes.
 - Apply tenancy, ACLs, row-level security, query whitelisting, or any other policy. http-sql is transport, not policy.
 
 ### 10.2 Client conformance
 
-A v0.1 conforming client MUST:
+A v0.2 conforming client MUST:
 
 1. Send `Content-Type: application/json`.
 2. Send exactly one of `sql` or `batch` in the request body.
@@ -286,7 +285,7 @@ A v0.1 conforming client MUST:
 5. On a non-atomic batch error, treat the statements preceding `error.statementIndex` as applied (section 6.2.1). A client MUST NOT assume no statements were applied.
 6. Not require any vendor-specific request or response fields beyond those defined here.
 
-A v0.1 conforming client SHOULD:
+A v0.2 conforming client SHOULD:
 
 - Send the `X-Http-Sql-Accept-Version` header.
 - Treat `error.code` values it does not recognize as the closest registered code by HTTP status family.
@@ -294,6 +293,11 @@ A v0.1 conforming client SHOULD:
 ## 11. Versioning policy
 
 This spec uses `<major>.<minor>` versioning. Until `1.0`, the minor version increments on any breaking change. After `1.0`, breaking changes increment the major version. Additive changes (new optional fields, new registered types, new registered error codes) increment the minor version.
+
+### Version history
+
+- **0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
+- **0.1** — initial draft.
 
 ## 12. Security considerations
 

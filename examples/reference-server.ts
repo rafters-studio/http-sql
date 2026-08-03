@@ -1,4 +1,4 @@
-// Reference http-sql v0.1 server, ~80 lines.
+// Reference http-sql v0.2 server, ~80 lines.
 //
 // Runs on any platform with `fetch`-style Request/Response (Workers, Deno,
 // Bun, Node 20+ with the undici fetch globals). The SQL execution is faked
@@ -16,7 +16,7 @@ interface Result {
   lastInsertId?: string | number | null;
 }
 
-const VERSION_HEADER = { "X-Http-Sql-Version": "0.1" };
+const VERSION_HEADER = { "X-Http-Sql-Version": "0.2" };
 const JSON_HEADERS = { "content-type": "application/json", ...VERSION_HEADER };
 
 export async function handle(req: Request, auth: (req: Request) => boolean): Promise<Response> {

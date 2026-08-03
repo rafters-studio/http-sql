@@ -1,4 +1,4 @@
-// Reference http-sql v0.1 client, ~40 lines.
+// Reference http-sql v0.2 client, ~40 lines.
 //
 // Uses the platform `fetch`. No dependencies.
 
@@ -37,7 +37,7 @@ export class HttpSqlClient {
       headers: {
         "content-type": "application/json",
         "authorization": `Bearer ${this.token}`,
-        "x-http-sql-accept-version": "0.1",
+        "x-http-sql-accept-version": "0.2",
       },
       body: JSON.stringify(body),
     });

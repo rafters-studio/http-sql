@@ -1,4 +1,4 @@
-// http-sql v0.1 over Cloudflare Durable Objects, with Hono.
+// http-sql v0.2 over Cloudflare Durable Objects, with Hono.
 //
 // Each tenant maps to its own DO instance, and each DO holds its own real
 // SQLite via ctx.storage.sql. The Worker is just a router: validate the
@@ -17,7 +17,7 @@ export interface Env {
   TENANT_TOKEN_BOB: string;
 }
 
-const VERSION = "0.1";
+const VERSION = "0.2";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -63,7 +63,7 @@ function resolveTenant(header: string, env: Env): string | null {
 
 // =============================================================================
 // TenantDO: one Durable Object per tenant. Holds a real SQLite database via
-// ctx.storage.sql. Receives http-sql v0.1 envelopes from the router and runs
+// ctx.storage.sql. Receives http-sql v0.2 envelopes from the router and runs
 // them against its own SQLite. All access for a given tenant is serialized
 // through this single instance.
 // =============================================================================
