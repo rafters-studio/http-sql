@@ -22,6 +22,9 @@ const JSON_HEADERS = { "content-type": "application/json", ...VERSION_HEADER };
 export async function handle(req: Request, auth: (req: Request) => boolean): Promise<Response> {
   if (!auth(req)) return errorResponse(401, "auth_error", "missing or invalid bearer token");
   if (req.method !== "POST") return errorResponse(405, "bad_request", "POST required");
+  if (!isJsonMediaType(req.headers.get("content-type"))) {
+    return errorResponse(415, "unsupported_media_type", "Content-Type must be application/json");
+  }
 
   let body: RequestBody;
   try { body = await req.json(); }
@@ -45,6 +48,12 @@ export async function handle(req: Request, auth: (req: Request) => boolean): Pro
     const message = err instanceof Error ? err.message : String(err);
     return errorResponse(400, "sql_error", message);
   }
+}
+
+// SPEC.md section 2: only the media type is significant, so parameters such as
+// `charset=utf-8` are ignored.
+function isJsonMediaType(header: string | null): boolean {
+  return header?.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
 // Replace these with calls to your actual database client.

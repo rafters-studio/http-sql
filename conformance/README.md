@@ -2,6 +2,8 @@
 
 A conforming http-sql v0.1 server passes the test cases below when probed at its endpoint URL with a valid bearer token.
 
+Cases marked `(v0.2+)` exercise behavior introduced after v0.1 and are not required of a server that advertises `X-Http-Sql-Version: 0.1`.
+
 This directory will contain a runnable TypeScript test suite. The current document defines the test cases that runner must implement, so server implementers can self-check before installing the runner.
 
 ## How conformance is claimed
@@ -29,7 +31,8 @@ Conformance is self-asserted. The community can call out failures via issues.
 | R-1   | Body contains both `sql` and `batch`                             | 400, `error.code` = `bad_request`           |
 | R-2   | Body contains neither `sql` nor `batch`                          | 400, `error.code` = `bad_request`           |
 | R-3   | Body is not valid JSON                                           | 400, `error.code` = `bad_request`           |
-| R-4   | `Content-Type` other than `application/json`                     | 400 or 415                                  |
+| R-4   | `Content-Type` other than `application/json` (v0.2+)             | 415, `error.code` = `unsupported_media_type` |
+| R-5   | `Content-Type: application/json; charset=utf-8`                   | Executes normally -- media-type parameters are ignored |
 
 ### Single-statement execution
 

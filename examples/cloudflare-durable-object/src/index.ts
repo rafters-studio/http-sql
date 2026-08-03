@@ -31,6 +31,10 @@ app.post("/sql", async (c) => {
   const tenant = resolveTenant(c.req.header("authorization") ?? "", c.env);
   if (!tenant) return c.json({ error: { code: "auth_error", message: "missing or invalid bearer token" } }, 401);
 
+  if (!isJsonMediaType(c.req.header("content-type"))) {
+    return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+  }
+
   const id = c.env.TENANT_DO.idFromName(tenant);
   const stub = c.env.TENANT_DO.get(id);
   return stub.fetch(c.req.raw);
@@ -42,6 +46,12 @@ app.onError((err, c) => {
 });
 
 export default app;
+
+// SPEC.md section 2: only the media type is significant, so parameters such as
+// `charset=utf-8` are ignored.
+function isJsonMediaType(header: string | undefined): boolean {
+  return header?.split(";")[0].trim().toLowerCase() === "application/json";
+}
 
 function resolveTenant(header: string, env: Env): string | null {
   const token = header.replace(/^Bearer\s+/i, "").trim();

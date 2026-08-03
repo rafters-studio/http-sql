@@ -38,6 +38,10 @@ app.post(
   "/",
   async (c, next) => bearerAuth({ token: c.env.HTTP_SQL_TOKEN })(c, next),
   async (c) => {
+    if (!isJsonMediaType(c.req.header("content-type"))) {
+      return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+    }
+
     let body: SingleRequest | BatchRequest;
     try { body = await c.req.json(); }
     catch { return c.json({ error: { code: "bad_request", message: "invalid JSON" } }, 400); }
@@ -113,6 +117,12 @@ function projectD1Result(res: D1Result): StatementResult {
     rowsAffected: res.meta?.changes ?? 0,
     lastInsertId: res.meta?.last_row_id ?? null,
   };
+}
+
+// SPEC.md section 2: only the media type is significant, so parameters such as
+// `charset=utf-8` are ignored.
+function isJsonMediaType(header: string | undefined): boolean {
+  return header?.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
 // Tagged values per SPEC.md section 5.

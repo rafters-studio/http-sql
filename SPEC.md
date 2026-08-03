@@ -24,6 +24,8 @@ The endpoint MUST accept:
 - Request `Content-Type`: `application/json`
 - Response `Content-Type`: `application/json`
 
+A request whose `Content-Type` media type is not `application/json` MUST be rejected with the response defined in section 7 with `error.code` of `unsupported_media_type` and HTTP status `415`. Only the media type is significant: servers MUST ignore parameters such as `charset`, so `application/json; charset=utf-8` is accepted.
+
 The endpoint MAY accept other methods (e.g. `OPTIONS` for CORS preflight) but their semantics are out of scope.
 
 ## 3. Authentication
@@ -158,16 +160,19 @@ HTTP status: `4xx` or `5xx`.
 
 Registered error codes in v0.1:
 
-| `code`              | HTTP | Meaning                                                         |
-|---------------------|------|-----------------------------------------------------------------|
-| `bad_request`       | 400  | Request body shape is invalid.                                  |
-| `sql_error`         | 400  | The SQL is invalid or failed at runtime.                        |
-| `not_allowed`       | 400  | Statement shape is rejected by server policy.                   |
-| `auth_error`        | 401  | Missing or invalid credentials.                                 |
-| `permission_error`  | 403  | Authenticated but not permitted to run the statement.           |
-| `payload_too_large` | 413  | Request body or result set exceeds a server limit.              |
-| `rate_limited`      | 429  | Too many requests.                                              |
-| `internal_error`    | 500  | Server malfunction.                                             |
+| `code`                   | HTTP | Meaning                                                         |
+|--------------------------|------|-----------------------------------------------------------------|
+| `bad_request`            | 400  | Request body shape is invalid.                                  |
+| `sql_error`              | 400  | The SQL is invalid or failed at runtime.                        |
+| `not_allowed`            | 400  | Statement shape is rejected by server policy.                   |
+| `auth_error`             | 401  | Missing or invalid credentials.                                 |
+| `permission_error`       | 403  | Authenticated but not permitted to run the statement.           |
+| `payload_too_large`      | 413  | Request body or result set exceeds a server limit.              |
+| `unsupported_media_type` | 415  | Request `Content-Type` media type is not `application/json`.    |
+| `rate_limited`           | 429  | Too many requests.                                              |
+| `internal_error`         | 500  | Server malfunction.                                             |
+
+`unsupported_media_type` is introduced in v0.2. Per section 11, a new registered error code is an additive change that increments the minor version; this spec has no patch level, so the code is not available to a server that advertises `0.1`.
 
 Vendor codes carry the prefix `vendor:` (e.g. `vendor:cf_d1_quota_exceeded`). Clients SHOULD treat unknown `error.code` values as if they were the closest registered code by HTTP status family.
 
@@ -199,7 +204,7 @@ to indicate the maximum spec version they understand. Servers MAY use this for f
 
 A v0.1 conforming server MUST:
 
-1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs.
+1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs, and reject other media types per section 2.
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
