@@ -46,7 +46,8 @@ export async function handle(req: Request, auth: (req: Request) => boolean): Pro
     return ok({ results });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return errorResponse(400, "sql_error", message);
+    const statementIndex = (err as { statementIndex?: number }).statementIndex;
+    return errorResponse(400, "sql_error", message, statementIndex);
   }
 }
 
@@ -61,8 +62,22 @@ async function execute(_stmt: Statement): Promise<Result> {
   return { columns: [], rows: [], rowsAffected: 0, lastInsertId: null };
 }
 
-async function executeBatch(batch: Statement[], _atomic: boolean): Promise<Result[]> {
-  return Promise.all(batch.map((s) => execute(s)));
+async function executeBatch(batch: Statement[], atomic: boolean): Promise<Result[]> {
+  // SPEC.md 6.2.1: batches execute sequentially in array order, stopping at
+  // the first failure; a non-atomic failure carries error.statementIndex.
+  // In a real server the atomic branch wraps this loop in a transaction.
+  const out: Result[] = [];
+  for (let i = 0; i < batch.length; i++) {
+    try {
+      out.push(await execute(batch[i]));
+    } catch (err) {
+      if (!atomic && err !== null && typeof err === "object") {
+        (err as { statementIndex?: number }).statementIndex = i;
+      }
+      throw err;
+    }
+  }
+  return out;
 }
 
 function ok(body: unknown): Response {

@@ -27,10 +27,11 @@ export class HttpSqlClient {
   }
 
   async batch(statements: Statement[], atomic = false): Promise<BatchResult> {
-    return this.send({ batch: statements, atomic }) as Promise<BatchResult>;
+    return this.send({ batch: statements, atomic }, atomic) as Promise<BatchResult>;
   }
 
-  private async send(body: unknown): Promise<unknown> {
+  // `atomic` is undefined for single-statement requests.
+  private async send(body: unknown, atomic?: boolean): Promise<unknown> {
     const res = await fetch(this.endpoint, {
       method: "POST",
       headers: {
@@ -48,7 +49,19 @@ export class HttpSqlClient {
         code: "internal_error",
         message: `HTTP ${res.status}`,
       };
-      throw Object.assign(new Error(err.message), { code: err.code, statementIndex: err.statementIndex });
+      // Section 6.2.1: a non-atomic batch error does NOT mean nothing applied --
+      // statements before statementIndex persisted. Atomic batches rolled back,
+      // and a failed single statement applied nothing, so both are 0.
+      // `undefined` means exactly one thing: a non-atomic batch whose server
+      // omitted the REQUIRED statementIndex, so how far it got is UNKNOWN.
+      // Never treat that as zero -- a caller reading zero replays applied work.
+      const appliedCount = atomic === false ? err.statementIndex : 0;
+
+      throw Object.assign(new Error(err.message), {
+        code: err.code,
+        statementIndex: err.statementIndex,
+        appliedCount,
+      });
     }
 
     return json;

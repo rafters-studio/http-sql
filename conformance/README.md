@@ -50,8 +50,9 @@ Conformance is self-asserted. The community can call out failures via issues.
 |-------|------------------------------------------------------------------|---------------------------------------------|
 | B-1   | Two INSERTs, no `atomic`                                         | 200, `results` array length 2               |
 | B-2   | Two INSERTs with `atomic: true`                                  | 200, `results` array length 2               |
-| B-3   | Atomic batch where the second statement fails                    | 400, error envelope, no rows persisted      |
-| B-4   | Non-atomic batch where the second statement fails                | 400, error envelope (servers MAY also return 200 with partial results -- the spec leaves this implementation-defined; recommended behavior is to fail closed) |
+| B-3   | Atomic batch where the second statement fails                    | 400, error envelope. NO statement persisted -- the first INSERT is absent. |
+| B-4   | Non-atomic batch where the second statement fails                | 400, error envelope, `error.statementIndex` = 1. The FIRST statement PERSISTS -- its INSERT is present. |
+| B-5   | Non-atomic three-statement batch where the second fails           | 400, error envelope, `error.statementIndex` = 1. First statement persists, THIRD did not execute. |
 
 ### Parameter types
 

@@ -181,7 +181,20 @@ HTTP status: `200`.
 
 - `results` (REQUIRED, array of single-statement result objects) — in the same order as the request `batch`. Each element has the shape of section 6.1.
 
-If an atomic batch fails partway through, the response is the error envelope in section 7, not a partial `results` array.
+A `results` array MUST have the same length as the request `batch`. A server MUST NOT return status `200` with a `results` array covering only some of the submitted statements.
+
+#### 6.2.1 Batch failure
+
+If a statement in a batch fails, the response is the error envelope in section 7, not a partial `results` array. This holds for both atomic and non-atomic batches.
+
+Servers MUST execute the statements of a non-atomic batch one at a time, in `batch` array order, and MUST stop at the first statement that fails. Without this, `error.statementIndex` does not partition the batch: a server that executed statements concurrently could commit a later statement while an earlier one failed, and the client could conclude nothing about what persisted. Atomic batches carry no ordering obligation, because the transaction makes execution order unobservable.
+
+Given that, the two cases differ in what persists, and the difference is normative:
+
+- **Atomic batch** (`atomic: true`) — the transaction rolls back. No statement in the batch has any effect.
+- **Non-atomic batch** (`atomic` absent or `false`) — statements preceding the failing statement have been executed and their effects persist. The failing statement and all statements after it have not been executed. Clients MUST NOT treat a non-atomic batch error as no-statements-applied.
+
+For a non-atomic batch failure the server MUST include `error.statementIndex` (section 7), because it is the only means by which a client can determine how far the batch got. No such obligation applies to an atomic batch failure: nothing persisted, so there is nothing for the client to locate.
 
 ## 7. Error responses
 
@@ -199,7 +212,7 @@ HTTP status: `4xx` or `5xx`.
 
 - `error.code` (REQUIRED, string) — one of the registered codes below, or a vendor-namespaced code (`vendor:<name>`).
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
-- `error.statementIndex` (OPTIONAL, integer) — for batch requests, the zero-based index of the statement that failed. Omitted for single-statement requests.
+- `error.statementIndex` (REQUIRED for non-atomic batch statement failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
 Registered error codes in v0.1:
 
@@ -252,8 +265,10 @@ A v0.1 conforming server MUST:
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
 5. Honor `atomic: true` on batch requests.
-6. Accept the registered parameter types in section 5 (`blob`, `bigint`).
-7. Emit the `X-Http-Sql-Version` response header.
+6. Execute a non-atomic batch sequentially in array order, stopping at the first failure (section 6.2.1).
+7. On a batch statement failure, return the error envelope rather than a partial `results` array, and include `error.statementIndex` when the batch was non-atomic (section 6.2.1).
+8. Accept the registered parameter types in section 5 (`blob`, `bigint`).
+9. Emit the `X-Http-Sql-Version` response header.
 
 A v0.1 conforming server MAY:
 
@@ -268,7 +283,8 @@ A v0.1 conforming client MUST:
 2. Send exactly one of `sql` or `batch` in the request body.
 3. Use the standard parameter encoding from section 5.
 4. Handle the success and error envelopes from sections 6 and 7.
-5. Not require any vendor-specific request or response fields beyond those defined here.
+5. On a non-atomic batch error, treat the statements preceding `error.statementIndex` as applied (section 6.2.1). A client MUST NOT assume no statements were applied.
+6. Not require any vendor-specific request or response fields beyond those defined here.
 
 A v0.1 conforming client SHOULD:
 
