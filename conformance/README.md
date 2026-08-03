@@ -71,7 +71,7 @@ Conformance is self-asserted. The community can call out failures via issues.
 ## Optional / "nice to have"
 
 - Vendor error codes carry the `vendor:` prefix.
-- `lastInsertId` is populated for INSERT statements where the SQL engine reports it.
+- `lastInsertId` is populated for INSERT statements where the SQL engine reports it, as a JSON string (integer ids as decimal strings) or `null` — never a JSON number.
 - Rate-limited responses return `error.code` = `rate_limited` and HTTP 429.
 - Server enforces a maximum result row count and returns `payload_too_large` past it.
 

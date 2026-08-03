@@ -21,7 +21,7 @@ interface StatementResult {
   columns: string[];
   rows: unknown[][];
   rowsAffected: number;
-  lastInsertId?: string | number | null;
+  lastInsertId?: string | null;
 }
 
 const VERSION = "0.1";
@@ -107,11 +107,14 @@ async function runBatch(db: D1Database, batch: Statement[], atomic: boolean): Pr
 function projectD1Result(res: D1Result): StatementResult {
   const rows = (res.results ?? []) as Record<string, unknown>[];
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  // SPEC 6.1: lastInsertId is a string or null, never a JSON number, so 64-bit
+  // rowids survive clients whose numbers are IEEE-754 doubles.
+  const lastRowId = res.meta?.last_row_id;
   return {
     columns,
     rows: rows.map((r) => columns.map((c) => encodeValue(r[c]))),
     rowsAffected: res.meta?.changes ?? 0,
-    lastInsertId: res.meta?.last_row_id ?? null,
+    lastInsertId: lastRowId === undefined || lastRowId === null ? null : String(lastRowId),
   };
 }
 
