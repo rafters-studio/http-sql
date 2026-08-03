@@ -31,6 +31,10 @@ app.post("/sql", async (c) => {
   const tenant = resolveTenant(c.req.header("authorization") ?? "", c.env);
   if (!tenant) return c.json({ error: { code: "auth_error", message: "missing or invalid bearer token" } }, 401);
 
+  if (!isJsonMediaType(c.req.header("content-type"))) {
+    return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+  }
+
   const id = c.env.TENANT_DO.idFromName(tenant);
   const stub = c.env.TENANT_DO.get(id);
   return stub.fetch(c.req.raw);
@@ -42,6 +46,12 @@ app.onError((err, c) => {
 });
 
 export default app;
+
+// SPEC.md section 2: only the media type is significant, so parameters such as
+// `charset=utf-8` are ignored.
+function isJsonMediaType(header: string | undefined): boolean {
+  return header?.split(";")[0].trim().toLowerCase() === "application/json";
+}
 
 function resolveTenant(header: string, env: Env): string | null {
   const token = header.replace(/^Bearer\s+/i, "").trim();
@@ -155,6 +165,23 @@ function decodeParam(value: unknown): unknown {
   return value;
 }
 
+// Response encoding per SPEC.md section 6.1. This branches on the runtime type
+// ctx.storage.sql returned, which is only sufficient because the value survived
+// the driver.
+//
+// KNOWN NON-CONFORMANCE (spec 6.1, conformance case V-1): SqlStorage has no
+// lossless integer mode. The Durable Objects storage docs state that "any
+// numeric value in a column is affected by JavaScript's 52-bit precision for
+// numbers. If you store a very large number (in int64), then retrieve the same
+// value, the returned value may be less precise than your original number."
+// SqlStorageValue is ArrayBuffer | string | number | null -- BigInt is not in
+// the union and no option adds it. So an integer above 2^53 arrives here
+// already rounded and this branch cannot recover it. Tracked upstream at
+// https://github.com/cloudflare/workerd/issues/4195 (open, covers DO SQLite
+// mode as well as D1). Until that lands, the workaround is at the SQL layer:
+// `SELECT CAST(col AS TEXT)` keeps the digits intact. Applying that
+// automatically would require parsing the caller's SQL, which this example
+// deliberately does not do.
 function encodeValue(value: unknown): unknown {
   if (value instanceof ArrayBuffer) return { $type: "blob", $value: base64Encode(new Uint8Array(value)) };
   if (typeof value === "bigint") return { $type: "bigint", $value: value.toString() };

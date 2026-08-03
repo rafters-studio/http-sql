@@ -80,6 +80,7 @@ Response to the SELECT:
 - **No tenancy enforcement.** Anyone with the bearer token can run any SQL against the bound D1. Add row-level scoping (e.g. inject `WHERE tenant_id = ?` derived from the auth token) if you need multi-tenancy.
 - **No statement allowlisting.** A compromised token grants `DROP TABLE`. Production setups should restrict the statement surface based on the authenticated principal.
 - **No rate limiting.** Use Cloudflare's built-in rate limiting or a service binding to enforce it.
+- **No lossless 64-bit integers on the way out.** This is a known non-conformance with spec section 6.1 and conformance case V-1, not a design choice. D1 stores 64-bit INTEGERs, but the Workers binding has no mode that returns them as `BigInt` -- an integer above 2^53 is rounded to a double inside the driver, before the Worker sees it. Tracked upstream at [workerd#4195](https://github.com/cloudflare/workerd/issues/4195). If you need those values today, `SELECT CAST(col AS TEXT)` in your SQL and parse the digits client-side.
 - **No pagination.** Per spec section 8, large result sets should be capped via `LIMIT` / `OFFSET` in the SQL. A future http-sql revision may add cursor pagination.
 
 ## Variants worth building yourself

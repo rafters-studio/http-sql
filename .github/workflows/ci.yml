@@ -1,0 +1,26 @@
+name: spec-sanity
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  spec-sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No merge-conflict markers
+        run: |
+          if grep -rn --include='*' -E '^(<{7}|={7}$|>{7})' --exclude-dir=.git .; then
+            echo '::error::merge-conflict markers found in tracked files'
+            exit 1
+          fi
+      - name: SPEC.md section structure
+        run: |
+          missing=0
+          for n in 1 2 3 4 5 6 7 8 9 10 11; do
+            if ! grep -qE "^## ${n}\." SPEC.md; then
+              echo "::error file=SPEC.md::missing section heading '## ${n}.'"
+              missing=1
+            fi
+          done
+          exit $missing

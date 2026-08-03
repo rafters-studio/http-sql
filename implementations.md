@@ -7,15 +7,15 @@ A directory of known servers and clients speaking the [http-sql v0.1 spec](./SPE
 | Implementation | Form | Backend | Notes |
 |----------------|------|---------|-------|
 | [examples/reference-server.ts](./examples/reference-server.ts) | TypeScript handler | _swap in your own DB_ | Dependency-free reference; the wire format with nothing else attached. |
-| [examples/cloudflare-worker-to-d1](./examples/cloudflare-worker-to-d1) | Cloudflare Worker (Hono) | Cloudflare D1 | Drop-in http-sql endpoint for an existing D1 database. Auth via bearer token. |
-| [examples/cloudflare-durable-object](./examples/cloudflare-durable-object) | Cloudflare Worker + Durable Object (Hono) | SQLite-backed DO storage | Each tenant is its own real SQLite at the edge. The flagship dogfood for "SQLite on both sides." |
+| [examples/cloudflare-worker-to-d1](./examples/cloudflare-worker-to-d1) | Cloudflare Worker (Hono) | Cloudflare D1 | Drop-in http-sql endpoint for an existing D1 database. Auth via bearer token. Fails conformance case V-1: the D1 binding has no lossless 64-bit integer mode ([workerd#4195](https://github.com/cloudflare/workerd/issues/4195)). |
+| [examples/cloudflare-durable-object](./examples/cloudflare-durable-object) | Cloudflare Worker + Durable Object (Hono) | SQLite-backed DO storage | Each tenant is its own real SQLite at the edge. The flagship dogfood for "SQLite on both sides." Fails conformance case V-1 for the same reason as the D1 example: `SqlStorageValue` has no BigInt. |
 
 ## Clients
 
 | Implementation | Form | Notes |
 |----------------|------|-------|
 | [examples/reference-client.ts](./examples/reference-client.ts) | TypeScript class, ~40 lines | Uses platform `fetch`. No dependencies. |
-| smugglr `http-sql` profile | Rust / WASM | _in flight; tracked in [rafters-studio/smugglr](https://github.com/rafters-studio/smugglr) -- link will land here when the profile ships._ |
+| [smugglr `http-sql` profile](https://github.com/rafters-studio/smugglr) | Rust / WASM | Shipped. `Profile::http_sql` in [rafters-studio/smugglr](https://github.com/rafters-studio/smugglr); emits single-statement request bodies. |
 
 ## Ways into the ecosystem
 

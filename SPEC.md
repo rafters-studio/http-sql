@@ -24,6 +24,8 @@ The endpoint MUST accept:
 - Request `Content-Type`: `application/json`
 - Response `Content-Type`: `application/json`
 
+A request whose `Content-Type` media type is not `application/json` MUST be rejected with the response defined in section 7 with `error.code` of `unsupported_media_type` and HTTP status `415`. Only the media type is significant: servers MUST ignore parameters such as `charset`, so `application/json; charset=utf-8` is accepted.
+
 The endpoint MAY accept other methods (e.g. `OPTIONS` for CORS preflight) but their semantics are out of scope.
 
 ## 3. Authentication
@@ -46,7 +48,9 @@ A request body MUST be a JSON object containing **either** a `sql` field (single
 ```
 
 - `sql` (REQUIRED, string) — the SQL statement.
-- `params` (OPTIONAL, array) — positional parameters, in the order of `?` placeholders in `sql`. Defaults to `[]`.
+- `params` (OPTIONAL, array) — positional parameters, in the order of the positional placeholders in `sql`. Defaults to `[]`.
+
+The placeholder syntax itself is the server's, not this spec's: http-sql does not parse or rewrite `sql`, so the client MUST write placeholders in the syntax its target server accepts. (Non-normative: `?` in SQLite and MySQL, `$1` in PostgreSQL. The examples in this document use `?`.)
 
 ### 4.2 Batch
 
@@ -65,17 +69,42 @@ A request body MUST be a JSON object containing **either** a `sql` field (single
 
 Servers MAY reject batches that exceed a server-defined statement count with HTTP status `413` and `error.code` of `payload_too_large`.
 
+> **Non-normative note (not part of the v0.1 contract).** The `atomic` obligation above is
+> one-directional, and v0.1 states that asymmetry deliberately rather than by oversight.
+>
+> There is no conforming way to decline. The obligation on `atomic: true` is unqualified
+> here and in section 10.1, and section 7 registers no code meaning "atomicity unavailable."
+> A server that cannot execute batches transactionally is simply non-conforming for batch in
+> v0.1. Even if such a server declined with a `vendor:` code, the signal would not travel:
+> section 7 directs clients to treat unknown codes as the closest registered code by HTTP
+> status family, which collapses the decline into ordinary `bad_request` / `sql_error`
+> semantics.
+>
+> There is also no way to confirm. Section 6.2's batch success envelope carries no atomicity
+> field and section 9 defines no atomicity header, so a `200` is shape-identical whether or
+> not the batch ran in a transaction. A client that sent `atomic: true` cannot verify the
+> obligation was met, and a client whose correctness would depend on that confirmation is
+> better designed as if no transaction exists.
+>
+> Three candidate shapes for closing the gap in a future version — a registered
+> `not_supported` code, an `atomic` echo field in the section 6.2 envelope, and capability
+> advertisement — are recorded in
+> [issue #13](https://github.com/rafters-studio/http-sql/issues/13) and are deliberately out
+> of scope for v0.1.
+
 ## 5. Parameter types
 
-Positional parameters use JSON values. The mapping to SQL types is:
+Positional parameters use JSON values. Each JSON value MUST be bound as the server's corresponding SQL type:
 
-| JSON value         | SQL type          |
-|--------------------|-------------------|
-| string             | TEXT              |
-| integer number     | INTEGER           |
-| floating-point     | REAL              |
-| boolean            | INTEGER (1 or 0)  |
-| null               | NULL              |
+| JSON value         | Bound as                 |
+|--------------------|--------------------------|
+| string             | the server's text type    |
+| integer number     | the server's integer type |
+| floating-point     | the server's real type    |
+| boolean            | the server's boolean type |
+| null               | SQL `NULL`                |
+
+The type names above are semantic, not literal SQL type names; each server maps them onto its own type system. Where a server's engine lacks one of these types natively, how it represents the value is an implementation detail of that server — for example, SQLite has no boolean type, so SQLite-backed servers store booleans as `1` and `0`. Servers MUST NOT assume any particular engine's type system on the client's behalf.
 
 For values that cannot be represented as a JSON primitive (binary blobs, integers outside JS-safe range, dates as strings of a specific format), a **tagged value** is used:
 
@@ -115,9 +144,25 @@ HTTP status: `200`.
 ```
 
 - `columns` (REQUIRED, array of strings) — the column names of the result, in the order produced by the SQL engine. Empty array for statements that produce no result set (INSERT, UPDATE, DELETE, DDL).
-- `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5. Empty array if no rows.
+- `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5, subject to the emission rules below. Empty array if no rows.
 - `rowsAffected` (REQUIRED, integer) — the number of rows changed by the statement. `0` for SELECT.
-- `lastInsertId` (OPTIONAL, string, number, or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). `null` when not applicable or not available.
+- `lastInsertId` (OPTIONAL, string or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). Always a string, never a JSON number: when the identifier is an integer it is encoded as a decimal string, consistent with the `bigint` encoding in section 5, so 64-bit ids survive clients whose numbers are IEEE-754 doubles. Text identifiers (a UUID primary key, say) are carried as-is. `null` when not applicable or not available.
+
+#### Response value encoding
+
+These rules are keyed on the **stored** value the statement produced, not on whatever runtime type the server's database driver handed back for it.
+
+The **JSON-safe integer range** is -(2^53 - 1) through 2^53 - 1 inclusive.
+
+- A server MUST emit an integer outside the JSON-safe integer range as `{"$type": "bigint", "$value": "<decimal digits>"}`.
+- A server MUST emit a binary value as `{"$type": "blob", "$value": "<base64>"}`.
+- A server MUST NOT substitute a lossy representation — a rounded number, a truncated integer, a re-formatted string that does not decode to the stored value — for the tagged form.
+- A server MAY emit the tagged form for any value it could also emit as a JSON primitive, including integers inside the JSON-safe range.
+- A server SHOULD emit values that are exactly representable as JSON primitives as JSON primitives.
+
+The same rules apply to the `rows` of every `results` entry in section 6.2.
+
+Note, non-normative: this is a constraint on the whole server, not only on its encoding layer. A driver that returns a 64-bit integer as a double has already destroyed the value before any encoding step runs, so conformance here is decided by how the database is queried, not by how the result is serialized.
 
 The arrays-of-arrays shape (not arrays-of-objects) is normative. It keeps payloads compact, makes column order explicit, and supports duplicate column names from joins.
 
@@ -167,20 +212,23 @@ HTTP status: `4xx` or `5xx`.
 
 - `error.code` (REQUIRED, string) — one of the registered codes below, or a vendor-namespaced code (`vendor:<name>`).
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
-- `error.statementIndex` (REQUIRED for non-atomic batch failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
+- `error.statementIndex` (REQUIRED for non-atomic batch statement failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
 Registered error codes in v0.1:
 
-| `code`              | HTTP | Meaning                                                         |
-|---------------------|------|-----------------------------------------------------------------|
-| `bad_request`       | 400  | Request body shape is invalid.                                  |
-| `sql_error`         | 400  | The SQL is invalid or failed at runtime.                        |
-| `not_allowed`       | 400  | Statement shape is rejected by server policy.                   |
-| `auth_error`        | 401  | Missing or invalid credentials.                                 |
-| `permission_error`  | 403  | Authenticated but not permitted to run the statement.           |
-| `payload_too_large` | 413  | Request body or result set exceeds a server limit.              |
-| `rate_limited`      | 429  | Too many requests.                                              |
-| `internal_error`    | 500  | Server malfunction.                                             |
+| `code`                   | HTTP | Meaning                                                         |
+|--------------------------|------|-----------------------------------------------------------------|
+| `bad_request`            | 400  | Request body shape is invalid.                                  |
+| `sql_error`              | 400  | The SQL is invalid or failed at runtime.                        |
+| `not_allowed`            | 400  | Statement shape is rejected by server policy.                   |
+| `auth_error`             | 401  | Missing or invalid credentials.                                 |
+| `permission_error`       | 403  | Authenticated but not permitted to run the statement.           |
+| `payload_too_large`      | 413  | Request body or result set exceeds a server limit.              |
+| `unsupported_media_type` | 415  | Request `Content-Type` media type is not `application/json`.    |
+| `rate_limited`           | 429  | Too many requests.                                              |
+| `internal_error`         | 500  | Server malfunction.                                             |
+
+`unsupported_media_type` is introduced in v0.2. Per section 11, a new registered error code is an additive change that increments the minor version; this spec has no patch level, so the code is not available to a server that advertises `0.1`.
 
 Vendor codes carry the prefix `vendor:` (e.g. `vendor:cf_d1_quota_exceeded`). Clients SHOULD treat unknown `error.code` values as if they were the closest registered code by HTTP status family.
 
@@ -190,7 +238,7 @@ http-sql v0.1 does not define pagination. Servers SHOULD enforce a server-define
 
 ## 9. Version negotiation
 
-Conforming servers SHOULD include the response header:
+Conforming servers MUST include the response header:
 
 ```
 X-Http-Sql-Version: 0.1
@@ -212,11 +260,11 @@ to indicate the maximum spec version they understand. Servers MAY use this for f
 
 A v0.1 conforming server MUST:
 
-1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs.
+1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs, and reject other media types per section 2.
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
-5. Honor `atomic: true` on batch requests when not rejected.
+5. Honor `atomic: true` on batch requests.
 6. Execute a non-atomic batch sequentially in array order, stopping at the first failure (section 6.2.1).
 7. On a batch statement failure, return the error envelope rather than a partial `results` array, and include `error.statementIndex` when the batch was non-atomic (section 6.2.1).
 8. Accept the registered parameter types in section 5 (`blob`, `bigint`).

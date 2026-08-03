@@ -21,7 +21,7 @@ interface StatementResult {
   columns: string[];
   rows: unknown[][];
   rowsAffected: number;
-  lastInsertId?: string | number | null;
+  lastInsertId?: string | null;
 }
 
 const VERSION = "0.1";
@@ -38,6 +38,10 @@ app.post(
   "/",
   async (c, next) => bearerAuth({ token: c.env.HTTP_SQL_TOKEN })(c, next),
   async (c) => {
+    if (!isJsonMediaType(c.req.header("content-type"))) {
+      return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+    }
+
     let body: SingleRequest | BatchRequest;
     try { body = await c.req.json(); }
     catch { return c.json({ error: { code: "bad_request", message: "invalid JSON" } }, 400); }
@@ -107,12 +111,21 @@ async function runBatch(db: D1Database, batch: Statement[], atomic: boolean): Pr
 function projectD1Result(res: D1Result): StatementResult {
   const rows = (res.results ?? []) as Record<string, unknown>[];
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  // SPEC 6.1: lastInsertId is a string or null, never a JSON number, so 64-bit
+  // rowids survive clients whose numbers are IEEE-754 doubles.
+  const lastRowId = res.meta?.last_row_id;
   return {
     columns,
     rows: rows.map((r) => columns.map((c) => encodeValue(r[c]))),
     rowsAffected: res.meta?.changes ?? 0,
-    lastInsertId: res.meta?.last_row_id ?? null,
+    lastInsertId: lastRowId === undefined || lastRowId === null ? null : String(lastRowId),
   };
+}
+
+// SPEC.md section 2: only the media type is significant, so parameters such as
+// `charset=utf-8` are ignored.
+function isJsonMediaType(header: string | undefined): boolean {
+  return header?.split(";")[0].trim().toLowerCase() === "application/json";
 }
 
 // Tagged values per SPEC.md section 5.
@@ -126,6 +139,19 @@ function decodeParam(value: unknown): unknown {
   return value;
 }
 
+// Response encoding per SPEC.md section 6.1. This branches on the runtime type
+// D1 returned, which is only sufficient because the value survived the driver.
+//
+// KNOWN NON-CONFORMANCE (spec 6.1, conformance case V-1): D1 stores 64-bit
+// INTEGERs but its Workers binding has no lossless mode -- there is no option,
+// method, or compatibility flag that makes it return a BigInt, so an integer
+// above 2^53 comes back as an already-rounded double and reaches this function
+// as a `number`. The original value is gone before any encoding step runs and
+// this branch cannot recover it. Tracked upstream at
+// https://github.com/cloudflare/workerd/issues/4195 (open). Until that lands,
+// the workaround is at the SQL layer: `SELECT CAST(col AS TEXT)` keeps the
+// digits intact. Applying that automatically would require parsing the caller's
+// SQL and inferring column types, which this example deliberately does not do.
 function encodeValue(value: unknown): unknown {
   if (value instanceof ArrayBuffer) return { $type: "blob", $value: base64Encode(new Uint8Array(value)) };
   if (typeof value === "bigint") return { $type: "bigint", $value: value.toString() };
