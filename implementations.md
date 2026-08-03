@@ -1,6 +1,6 @@
 # http-sql implementations
 
-A directory of known servers and clients speaking the [http-sql v0.1 spec](./SPEC.md). The list is bootstrap-thin; PRs welcome.
+A directory of known servers and clients speaking the [http-sql v0.2 spec](./SPEC.md). The list is bootstrap-thin; PRs welcome.
 
 ## Servers
 
@@ -27,7 +27,7 @@ The combinations above let you enter at whichever end matches what you already h
 
 ## How to add yours
 
-1. Implement the [v0.1 spec](./SPEC.md) (or the [conformance contract](./conformance/README.md) for self-check).
+1. Implement the [v0.2 spec](./SPEC.md) (or the [conformance contract](./conformance/README.md) for self-check).
 2. Open a PR adding a row to the table above.
 3. Include: name, form (Worker / Node / library), backend (D1 / Turso / Postgres / DO / etc), and one-line notes.
 
