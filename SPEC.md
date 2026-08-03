@@ -46,7 +46,9 @@ A request body MUST be a JSON object containing **either** a `sql` field (single
 ```
 
 - `sql` (REQUIRED, string) — the SQL statement.
-- `params` (OPTIONAL, array) — positional parameters, in the order of `?` placeholders in `sql`. Defaults to `[]`.
+- `params` (OPTIONAL, array) — positional parameters, in the order of the positional placeholders in `sql`. Defaults to `[]`.
+
+The placeholder syntax itself is the server's, not this spec's: http-sql does not parse or rewrite `sql`, so the client MUST write placeholders in the syntax its target server accepts. (Non-normative: `?` in SQLite and MySQL, `$1` in PostgreSQL. The examples in this document use `?`.)
 
 ### 4.2 Batch
 
@@ -67,15 +69,17 @@ Servers MAY reject batches that exceed a server-defined statement count with HTT
 
 ## 5. Parameter types
 
-Positional parameters use JSON values. The mapping to SQL types is:
+Positional parameters use JSON values. Each JSON value MUST be bound as the server's corresponding SQL type:
 
-| JSON value         | SQL type          |
-|--------------------|-------------------|
-| string             | TEXT              |
-| integer number     | INTEGER           |
-| floating-point     | REAL              |
-| boolean            | INTEGER (1 or 0)  |
-| null               | NULL              |
+| JSON value         | Bound as                 |
+|--------------------|--------------------------|
+| string             | the server's text type    |
+| integer number     | the server's integer type |
+| floating-point     | the server's real type    |
+| boolean            | the server's boolean type |
+| null               | SQL `NULL`                |
+
+The type names above are semantic, not literal SQL type names; each server maps them onto its own type system. Where a server's engine lacks one of these types natively, how it represents the value is an implementation detail of that server — for example, SQLite has no boolean type, so SQLite-backed servers store booleans as `1` and `0`. Servers MUST NOT assume any particular engine's type system on the client's behalf.
 
 For values that cannot be represented as a JSON primitive (binary blobs, integers outside JS-safe range, dates as strings of a specific format), a **tagged value** is used:
 
