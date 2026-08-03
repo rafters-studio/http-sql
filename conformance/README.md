@@ -35,7 +35,7 @@ Conformance is self-asserted. The community can call out failures via issues.
 
 | ID    | Description                                                      | Expected response                           |
 |-------|------------------------------------------------------------------|---------------------------------------------|
-| S-1   | `SELECT 1`                                                       | 200, `columns: ["1"]`, `rows: [[1]]`        |
+| S-1   | `SELECT 1 AS one`                                                | 200, `columns: ["one"]`, `rows: [[1]]`      |
 | S-2   | SELECT against a known table with params                         | 200, correct columns/rows shape             |
 | S-3   | INSERT against a known table                                     | 200, `rowsAffected >= 1`                    |
 | S-4   | Syntactically invalid SQL                                        | 400, `error.code` = `sql_error`             |
