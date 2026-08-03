@@ -61,6 +61,23 @@ Conformance is self-asserted. The community can call out failures via issues.
 | P-5   | Roundtrip a `bigint` tagged value                                | Returned value is `{"$type":"bigint","$value":"<digits>"}` |
 | P-6   | Send an unknown tagged type `{"$type":"unknown","$value":"..."}` | 400, `error.code` = `bad_request`           |
 
+P-1 through P-5 only prove that a server can hand back what the client just gave it. They cannot detect a server that rounds values it reads out of storage, so the cases below read values the client never sent as parameters.
+
+### Response value encoding
+
+These cases exercise section 6.1's emission rules. Each writes the value as **SQL literal text**, so the value reaches storage without ever passing through the request's `params` array, then reads it back.
+
+| ID    | Description                                                      | Expected response                           |
+|-------|------------------------------------------------------------------|---------------------------------------------|
+| V-1   | `INSERT INTO http_sql_conformance_notes (id, big_value) VALUES ('v1', 9007199254740993)` then `SELECT big_value FROM http_sql_conformance_notes WHERE id = 'v1'` | 200, value is `{"$type":"bigint","$value":"9007199254740993"}`. A bare JSON number FAILS this case, including `9007199254740992` — the rounded form. |
+| V-2   | Same as V-1 with the negative bound `-9007199254740993`           | 200, value is `{"$type":"bigint","$value":"-9007199254740993"}` |
+| V-3   | `INSERT INTO http_sql_conformance_notes (id, blob_value) VALUES ('v3', x'48656c6c6f')` then SELECT it back | 200, value is `{"$type":"blob","$value":"SGVsbG8="}` |
+| V-4   | Insert `42` into `big_value` as SQL literal text, then SELECT it   | 200, value is the JSON number `42` (the tagged form `{"$type":"bigint","$value":"42"}` also passes -- section 6.1 permits it) |
+
+V-1 is the case that a server passes only if its database driver surfaces 64-bit integers without loss. An encoding layer that branches on the runtime type it was handed cannot pass V-1 by itself: once the driver returns a rounded double, the stored value is unrecoverable.
+
+Servers on a non-SQLite backend substitute their dialect's literal syntax for the binary literal in V-3 (for example `'\x48656c6c6f'::bytea` on PostgreSQL). The assertions on the response are unchanged.
+
 ### Response headers
 
 | ID    | Description                                                      | Expected response                           |
@@ -82,9 +99,13 @@ The runner provisions a test schema before exercising the cases above. The fixtu
 ```sql
 CREATE TABLE http_sql_conformance_notes (
   id TEXT PRIMARY KEY,
-  body TEXT
+  body TEXT,
+  big_value BIGINT,
+  blob_value BLOB
 );
 ```
+
+`big_value` and `blob_value` exist for the V cases. Their declared types matter: on SQLite `BIGINT` carries INTEGER affinity and `BLOB` carries none, so neither column coerces the literal on the way in. Storing the V-1 literal in a `TEXT` column would convert it to a string and the case would prove nothing. On other backends use the nearest equivalents (PostgreSQL: `bigint` and `bytea`).
 
 Servers SHOULD allow the test runner to issue this `CREATE TABLE` as a normal http-sql request, or provide an out-of-band setup hook. The runner cleans up rows it inserts but does not drop the table.
 
