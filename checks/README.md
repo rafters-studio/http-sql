@@ -1,16 +1,16 @@
-# http-sql conformance
+# http-sql checks
 
-A conforming http-sql v0.2 server passes the test cases below when probed at its endpoint URL with a valid bearer token.
+An http-sql 0.0.1 server passes the checks below when probed at its endpoint URL with a valid bearer token.
 
 This directory will contain a runnable TypeScript test suite. The current document defines the test cases that runner must implement, so server implementers can self-check before installing the runner.
 
-## How conformance is claimed
+## How a server claims a version
 
 1. Implement the cases below against your endpoint.
 2. Open a PR adding your implementation to [implementations.md](../implementations.md) (to be created).
 3. Include a brief note on which optional features you support (tagged types beyond `blob`/`bigint`, vendor error codes, etc).
 
-Conformance is self-asserted. The community can call out failures via issues.
+Passing is self-reported. The community can call out failures via issues.
 
 ## Required test cases
 
@@ -29,8 +29,9 @@ Conformance is self-asserted. The community can call out failures via issues.
 | R-1   | Body contains both `sql` and `batch`                             | 400, `error.code` = `bad_request`           |
 | R-2   | Body contains neither `sql` nor `batch`                          | 400, `error.code` = `bad_request`           |
 | R-3   | Body is not valid JSON                                           | 400, `error.code` = `bad_request`           |
-| R-4   | `Content-Type` other than `application/json`                     | 415, `error.code` = `unsupported_media_type` |
+| R-4   | `Content-Type` other than `application/http-sql+json` or `application/json` | 415, `error.code` = `unsupported_media_type` |
 | R-5   | `Content-Type: application/json; charset=utf-8`                   | Executes normally -- media-type parameters are ignored |
+| R-6   | `Content-Type: application/http-sql+json`                        | Executes normally; response `Content-Type` is `application/http-sql+json` |
 
 ### Single-statement execution
 
@@ -71,9 +72,9 @@ These cases exercise section 6.1's emission rules. Each writes the value as **SQ
 
 | ID    | Description                                                      | Expected response                           |
 |-------|------------------------------------------------------------------|---------------------------------------------|
-| V-1   | `INSERT INTO http_sql_conformance_notes (id, big_value) VALUES ('v1', 9007199254740993)` then `SELECT big_value FROM http_sql_conformance_notes WHERE id = 'v1'` | 200, value is `{"$type":"bigint","$value":"9007199254740993"}`. A bare JSON number FAILS this case, including `9007199254740992` — the rounded form. |
+| V-1   | `INSERT INTO http_sql_check_notes (id, big_value) VALUES ('v1', 9007199254740993)` then `SELECT big_value FROM http_sql_check_notes WHERE id = 'v1'` | 200, value is `{"$type":"bigint","$value":"9007199254740993"}`. A bare JSON number FAILS this case, including `9007199254740992` — the rounded form. |
 | V-2   | Same as V-1 with the negative bound `-9007199254740993`           | 200, value is `{"$type":"bigint","$value":"-9007199254740993"}` |
-| V-3   | `INSERT INTO http_sql_conformance_notes (id, blob_value) VALUES ('v3', x'48656c6c6f')` then SELECT it back | 200, value is `{"$type":"blob","$value":"SGVsbG8="}` |
+| V-3   | `INSERT INTO http_sql_check_notes (id, blob_value) VALUES ('v3', x'48656c6c6f')` then SELECT it back | 200, value is `{"$type":"blob","$value":"SGVsbG8="}` |
 | V-4   | Insert `42` into `big_value` as SQL literal text, then SELECT it   | 200, value is the JSON number `42` (the tagged form `{"$type":"bigint","$value":"42"}` also passes -- section 6.1 permits it) |
 
 V-1 is the case that a server passes only if its database driver surfaces 64-bit integers without loss. An encoding layer that branches on the runtime type it was handed cannot pass V-1 by itself: once the driver returns a rounded double, the stored value is unrecoverable.
@@ -84,11 +85,13 @@ Servers on a non-SQLite backend substitute their dialect's literal syntax for th
 
 | ID    | Description                                                      | Expected response                           |
 |-------|------------------------------------------------------------------|---------------------------------------------|
-| H-1   | Any successful response                                          | Includes `X-Http-Sql-Version: 0.2`          |
-| H-2   | Any error response                                               | Includes `X-Http-Sql-Version: 0.2`          |
+| H-1   | Any successful response                                          | Includes `Http-Sql-Version: 0.0.1`          |
+| H-2   | Any error response                                               | Includes `Http-Sql-Version: 0.0.1`          |
 
 ## Optional / "nice to have"
 
+- `QUERY` accepted at the endpoint with the same body and envelopes as `POST` (spec 2.1); responses carry `Accept-Query: application/http-sql+json`.
+- Responses also carry the deprecated `X-Http-Sql-Version` until 1.0 so existing clients keep working.
 - Vendor error codes carry the `vendor:` prefix.
 - `lastInsertId` is populated for INSERT statements where the SQL engine reports it, as a JSON string (integer ids as decimal strings) or `null` — never a JSON number.
 - Rate-limited responses return `error.code` = `rate_limited` and HTTP 429.
@@ -99,7 +102,7 @@ Servers on a non-SQLite backend substitute their dialect's literal syntax for th
 The runner provisions a test schema before exercising the cases above. The fixture is intentionally tiny so any SQL backend can host it:
 
 ```sql
-CREATE TABLE http_sql_conformance_notes (
+CREATE TABLE http_sql_check_notes (
   id TEXT PRIMARY KEY,
   body TEXT,
   big_value BIGINT,

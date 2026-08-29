@@ -1,6 +1,6 @@
 # cloudflare-durable-object
 
-Each tenant is its own real SQLite database at the edge. http-sql v0.1 in front, Cloudflare Durable Objects with [SQLite-backed storage](https://developers.cloudflare.com/durable-objects/api/sql-storage/) underneath.
+Each tenant is its own real SQLite database at the edge. http-sql 0.0.1 in front, Cloudflare Durable Objects with [SQLite-backed storage](https://developers.cloudflare.com/durable-objects/api/sql-storage/) underneath.
 
 ## The shape
 
@@ -8,7 +8,7 @@ Each tenant is its own real SQLite database at the edge. http-sql v0.1 in front,
 +-------------+         +---------------------+         +-----------------------------------+
 | any client  |  HTTPS  |  Worker (Hono)      |  RPC    |  TenantDO (Alice)                  |
 | http-sql    |-------> |  - bearer -> tenant |-------> |  - ctx.storage.sql                 |
-| v0.1        |         |  - route to DO      |         |  - real SQLite, alice's data only  |
+| 0.0.1       |         |  - route to DO      |         |  - real SQLite, alice's data only  |
 +-------------+         +---------------------+   |     +-----------------------------------+
                                                   |
                                                   |     +-----------------------------------+
@@ -82,14 +82,14 @@ This is the point: Bob isn't filtered out of Alice's table -- the table genuinel
 | SQL execution        | `ctx.storage.sql.exec(sql, ...params)` against the DO's own SQLite.         |
 | Atomic batches       | `ctx.storage.transactionSync(() => batch.map(...))`.                        |
 | Tagged params/values | `blob` (base64 <-> `Uint8Array`), `bigint` (string <-> `BigInt`).           |
-| Version header       | `X-Http-Sql-Version: 0.1` on every response.                                |
+| Version header       | `Http-Sql-Version: 0.0.1` (and the deprecated `X-Http-Sql-Version`) on every response.                                |
 
 ## What this Worker does NOT do (yet)
 
 - **WebSocket fan-out for live sync.** The DO already holds the perfect spot for it: after a successful write, broadcast a `{type:"changed"}` message to every connected websocket for the same tenant. Connected browsers wake up and pull. That's how you get "tab A's INSERT shows up in tab B without polling." Skipped in v1 to keep the example focused; ~30 lines to add.
 - **JWT verification.** Hono has `hono/jwt` and works with JWKS-based verification too. The demo uses a hardcoded token map for clarity.
 - **Multi-database per tenant.** This example assumes one SQLite per tenant. If you want multiple logical databases per tenant, route on `/sql/:db` or include `db` in the token claims.
-- **Return 64-bit integers without loss.** This one is a known non-conformance with spec section 6.1 and conformance case V-1, not a deferred feature. `SqlStorageValue` is `ArrayBuffer | string | number | null`; BigInt is not in the union and no option adds it, and the [storage docs](https://developers.cloudflare.com/durable-objects/api/storage-api/) state that a very large `int64` "may be less precise than your original number" when retrieved. The rounding happens inside the driver, before the DO sees the row. Tracked upstream at [workerd#4195](https://github.com/cloudflare/workerd/issues/4195). Workaround today: `SELECT CAST(col AS TEXT)` and parse the digits client-side.
+- **Return 64-bit integers without loss.** This is a known failure of spec section 6.1 and check V-1, not a deferred feature. `SqlStorageValue` is `ArrayBuffer | string | number | null`; BigInt is not in the union and no option adds it, and the [storage docs](https://developers.cloudflare.com/durable-objects/api/storage-api/) state that a very large `int64` "may be less precise than your original number" when retrieved. The rounding happens inside the driver, before the DO sees the row. Tracked upstream at [workerd#4195](https://github.com/cloudflare/workerd/issues/4195). Workaround today: `SELECT CAST(col AS TEXT)` and parse the digits client-side.
 - **Migrations across DOs.** Schema changes need to fan out across every DO instance. You can do this lazily (first request after a deploy runs `CREATE TABLE IF NOT EXISTS` etc.) or eagerly (a job iterates the tenant directory).
 
 ## See also

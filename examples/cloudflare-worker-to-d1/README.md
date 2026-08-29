@@ -1,12 +1,12 @@
 # cloudflare-worker-to-d1
 
-A Cloudflare Worker that gives any D1 database an http-sql v0.1 endpoint.
+A Cloudflare Worker that gives any D1 database an http-sql 0.0.1 endpoint.
 
 POST http-sql requests to this Worker; it translates to D1 binding calls and returns http-sql responses. Built on [Hono](https://hono.dev) so the auth, CORS, and routing layers come from well-known middleware instead of being hand-rolled.
 
 ## Why this exists
 
-The fastest way to understand what http-sql means in practice. Bring your own D1, deploy the Worker, and you have a conforming http-sql server. Point any http-sql client at it -- including the [reference client](../reference-client.ts) or the smugglr `http-sql` profile -- and it just works.
+The fastest way to understand what http-sql means in practice. Bring your own D1, deploy the Worker, and you have an http-sql server. Point any http-sql client at it -- including the [reference client](../reference-client.ts) or the smugglr `http-sql` profile -- and it just works.
 
 This is also the proof that http-sql is implementable in a small amount of code on top of an existing SQL backend. If it takes 150 lines for D1, it takes roughly that much for Turso, rqlite, libSQL, or sqlite3-in-a-Node-server.
 
@@ -73,14 +73,14 @@ Response to the SELECT:
 | 5. Parameter types      | JSON primitives pass through. `{$type: "blob", ...}` decodes to `Uint8Array`. `{$type: "bigint", ...}` to a JS `BigInt`. Binary results re-encode on the way out. |
 | 6. Success responses    | Columns derived from the first row's keys (D1 returns objects); rows are remapped to the spec's array-of-arrays shape. |
 | 7. Error responses      | Maps validation errors to `bad_request`, missing auth to `auth_error`, runtime SQL errors to `sql_error`. |
-| 9. Version negotiation  | Every response carries `X-Http-Sql-Version: 0.1`.                                   |
+| 9. Version negotiation  | Every response carries `Http-Sql-Version: 0.0.1` (and the deprecated `X-Http-Sql-Version`).                                   |
 
 ## What this Worker does NOT do
 
 - **No tenancy enforcement.** Anyone with the bearer token can run any SQL against the bound D1. Add row-level scoping (e.g. inject `WHERE tenant_id = ?` derived from the auth token) if you need multi-tenancy.
 - **No statement allowlisting.** A compromised token grants `DROP TABLE`. Production setups should restrict the statement surface based on the authenticated principal.
 - **No rate limiting.** Use Cloudflare's built-in rate limiting or a service binding to enforce it.
-- **No lossless 64-bit integers on the way out.** This is a known non-conformance with spec section 6.1 and conformance case V-1, not a design choice. D1 stores 64-bit INTEGERs, but the Workers binding has no mode that returns them as `BigInt` -- an integer above 2^53 is rounded to a double inside the driver, before the Worker sees it. Tracked upstream at [workerd#4195](https://github.com/cloudflare/workerd/issues/4195). If you need those values today, `SELECT CAST(col AS TEXT)` in your SQL and parse the digits client-side.
+- **No lossless 64-bit integers on the way out.** This is a known failure of spec section 6.1 and check V-1, not a design choice. D1 stores 64-bit INTEGERs, but the Workers binding has no mode that returns them as `BigInt` -- an integer above 2^53 is rounded to a double inside the driver, before the Worker sees it. Tracked upstream at [workerd#4195](https://github.com/cloudflare/workerd/issues/4195). If you need those values today, `SELECT CAST(col AS TEXT)` in your SQL and parse the digits client-side.
 - **No pagination.** Per spec section 8, large result sets should be capped via `LIMIT` / `OFFSET` in the SQL. A future http-sql revision may add cursor pagination.
 
 ## Variants worth building yourself

@@ -1,8 +1,8 @@
-# http-sql v0.2
+# http-sql 0.0.1
 
 An HTTP wire format for submitting a SQL statement and receiving a result set.
 
-**Status:** Draft, v0.2.
+**Status:** 0.0.1, a thinking-stage draft. Nothing here is settled; expect the shape to move.
 **Editor:** [@rafters-studio](https://github.com/rafters-studio)
 **License:** MIT
 
@@ -14,19 +14,33 @@ All examples are illustrative. The normative content is the prose.
 
 ## 2. Endpoint
 
-A conforming http-sql server MUST expose at least one HTTP endpoint URL that accepts SQL statements per this spec. The endpoint URL is server-defined; clients receive it as configuration.
+A server that follows this spec MUST expose at least one HTTP endpoint URL that accepts SQL statements per this spec. The endpoint URL is server-defined; clients receive it as configuration.
 
 Servers MAY expose multiple endpoint URLs (for example, one per database). The wire format at each endpoint MUST be identical.
 
 The endpoint MUST accept:
 
 - HTTP method: `POST`
-- Request `Content-Type`: `application/json`
-- Response `Content-Type`: `application/json`
+- Request `Content-Type`: `application/http-sql+json` or `application/json`
+- Response `Content-Type`: `application/http-sql+json`
 
-A request whose `Content-Type` media type is not `application/json` MUST be rejected with the response defined in section 7 with `error.code` of `unsupported_media_type` and HTTP status `415`. Only the media type is significant: servers MUST ignore parameters such as `charset`, so `application/json; charset=utf-8` is accepted.
+`application/http-sql+json` is the http-sql media type. Its body is the JSON defined in sections 4, 6, and 7; the `+json` suffix ([RFC 6839](https://www.rfc-editor.org/rfc/rfc6839)) means any JSON tool can read it. Servers MUST also accept plain `application/json` on requests, so a `curl -H 'Content-Type: application/json'` keeps working; the two are interchangeable on the request side and servers MUST NOT treat them differently. Responses use `application/http-sql+json` so a client can tell an http-sql envelope from any other JSON.
 
-The endpoint MAY accept other methods (e.g. `OPTIONS` for CORS preflight) but their semantics are out of scope.
+A request whose `Content-Type` media type is neither of the two above MUST be rejected with the response defined in section 7 with `error.code` of `unsupported_media_type` and HTTP status `415`. Only the media type is significant: servers MUST ignore parameters such as `charset`, so `application/json; charset=utf-8` is accepted.
+
+The endpoint MAY accept other methods (e.g. `OPTIONS` for CORS preflight) but their semantics are out of scope, with one exception defined in section 2.1.
+
+### 2.1 QUERY (optional read binding)
+
+[RFC 10008](https://www.rfc-editor.org/rfc/rfc10008) defines the HTTP `QUERY` method: safe, idempotent, and cacheable like `GET`, with a request body like `POST`. A server MAY accept `QUERY` at the endpoint. When it does:
+
+- The request body, `Content-Type` rules, and response envelopes are exactly those of `POST`. A server MUST execute a `QUERY` request the same way it executes the same body sent as `POST`; it MUST NOT parse or classify the SQL to decide.
+- The server SHOULD emit `Accept-Query: application/http-sql+json` on responses from the endpoint (any method), so a client can discover the binding.
+- A client that sends `QUERY` promises that the statement is safe to repeat and to serve from a cache. That promise is the client's; a server is not required to check it. A client MUST NOT send a statement that writes as `QUERY`. A server MAY reject a `QUERY` whose statement it knows to write with `error.code` of `not_allowed`.
+
+Why a client would bother: a read sent as `QUERY` may be retried by any HTTP layer after a connection failure without a spec-level idempotency key, and the SQL stays out of URL logs. Caches keyed on request content (RFC 10008 section 2.2) may serve it. Note, non-normative: as of 2026 the major CDNs and the Cloudflare Workers Cache API cache `GET` only, and browsers send a CORS preflight for `QUERY`, so the caching benefit is prospective. A server that wants cache hits today MAY answer a `QUERY` with `303 See Other` and a `Location` that a plain `GET` can repeat, per RFC 10008 section 2.3.
+
+`POST` remains the only required method. A server that ignores this section still follows the spec in full.
 
 ## 3. Authentication
 
@@ -72,9 +86,9 @@ Servers MAY reject batches that exceed a server-defined statement count with HTT
 > **Non-normative note (not part of the normative contract).** The `atomic` obligation above is
 > one-directional, and this spec states that asymmetry deliberately rather than by oversight.
 >
-> There is no conforming way to decline. The obligation on `atomic: true` is unqualified
+> There is no way to decline within the spec. The obligation on `atomic: true` is unqualified
 > here and in section 10.1, and section 7 registers no code meaning "atomicity unavailable."
-> A server that cannot execute batches transactionally is simply non-conforming for batch. Even if such a server declined with a `vendor:` code, the signal would not travel:
+> A server that cannot execute batches transactionally simply does not meet the spec for batch. Even if such a server declined with a `vendor:` code, the signal would not travel:
 > section 7 directs clients to treat unknown codes as the closest registered code by HTTP
 > status family, which collapses the decline into ordinary `bad_request` / `sql_error`
 > semantics.
@@ -115,7 +129,7 @@ For values that cannot be represented as a JSON primitive (binary blobs, integer
 - `$type` (REQUIRED, string) — one of the registered types listed below, or a vendor-namespaced type (`vendor:<name>`).
 - `$value` (REQUIRED) — the encoded value as a JSON value.
 
-Registered types in v0.2:
+Registered types in this draft:
 
 | `$type`  | `$value` encoding                                      |
 |----------|--------------------------------------------------------|
@@ -161,7 +175,7 @@ The **JSON-safe integer range** is -(2^53 - 1) through 2^53 - 1 inclusive.
 
 The same rules apply to the `rows` of every `results` entry in section 6.2.
 
-Note, non-normative: this is a constraint on the whole server, not only on its encoding layer. A driver that returns a 64-bit integer as a double has already destroyed the value before any encoding step runs, so conformance here is decided by how the database is queried, not by how the result is serialized.
+Note, non-normative: this is a constraint on the whole server, not only on its encoding layer. A driver that returns a 64-bit integer as a double has already destroyed the value before any encoding step runs, so passing here is decided by how the database is queried, not by how the result is serialized.
 
 The arrays-of-arrays shape (not arrays-of-objects) is normative. It keeps payloads compact, makes column order explicit, and supports duplicate column names from joins.
 
@@ -213,7 +227,7 @@ HTTP status: `4xx` or `5xx`.
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
 - `error.statementIndex` (REQUIRED for non-atomic batch statement failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
-Registered error codes in v0.2:
+Registered error codes in this draft:
 
 | `code`                   | HTTP | Meaning                                                         |
 |--------------------------|------|-----------------------------------------------------------------|
@@ -227,39 +241,39 @@ Registered error codes in v0.2:
 | `rate_limited`           | 429  | Too many requests.                                              |
 | `internal_error`         | 500  | Server malfunction.                                             |
 
-`unsupported_media_type` was introduced in v0.2 (per section 11, a new registered error code is an additive change that increments the minor version). It is not available to a server that advertises `0.1`.
+`unsupported_media_type` was added in the second draft (formerly numbered 0.2); a server still on the first draft does not send it.
 
 Vendor codes carry the prefix `vendor:` (e.g. `vendor:cf_d1_quota_exceeded`). Clients SHOULD treat unknown `error.code` values as if they were the closest registered code by HTTP status family.
 
 ## 8. Pagination
 
-http-sql v0.2 does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
+This draft does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
 
 ## 9. Version negotiation
 
-Conforming servers MUST include the response header:
+Servers MUST include the response header:
 
 ```
-X-Http-Sql-Version: 0.2
+Http-Sql-Version: 0.0.1
 ```
 
-on every response (including error responses).
+on every response (including error responses). Until `1.0` servers SHOULD also send the old name, `X-Http-Sql-Version`, with the same value, so existing clients keep working; the `X-` form is deprecated and will not be sent by `1.0` servers. [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) deprecates the `X-` prefix for new header fields.
 
 Clients MAY send the request header:
 
 ```
-X-Http-Sql-Accept-Version: 0.2
+Http-Sql-Accept-Version: 0.0.1
 ```
 
-to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior. v0.2 servers ignore the header.
+to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior and MUST accept the deprecated `X-Http-Sql-Accept-Version` as a synonym until `1.0`. Servers at this draft ignore the header.
 
-## 10. Conformance
+## 10. What a server and a client must do
 
-### 10.1 Server conformance
+### 10.1 Servers
 
-A v0.2 conforming server MUST:
+A server at this draft MUST:
 
-1. Accept POST requests with `Content-Type: application/json` at one or more endpoint URLs, and reject other media types per section 2.
+1. Accept POST requests with `Content-Type: application/http-sql+json` or `application/json` at one or more endpoint URLs, respond with `application/http-sql+json`, and reject other media types per section 2.
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
 3. Return the success envelopes defined in section 6 for successful execution.
 4. Return the error envelope defined in section 7 for any failure, using the HTTP status codes in the table.
@@ -267,16 +281,17 @@ A v0.2 conforming server MUST:
 6. Execute a non-atomic batch sequentially in array order, stopping at the first failure (section 6.2.1).
 7. On a batch statement failure, return the error envelope rather than a partial `results` array, and include `error.statementIndex` when the batch was non-atomic (section 6.2.1).
 8. Accept the registered parameter types in section 5 (`blob`, `bigint`).
-9. Emit the `X-Http-Sql-Version` response header.
+9. Emit the `Http-Sql-Version` response header (section 9).
 
-A v0.2 conforming server MAY:
+A server at this draft MAY:
 
 - Accept additional vendor-namespaced parameter types or error codes.
+- Accept the `QUERY` method as a read binding (section 2.1) and advertise it with `Accept-Query`.
 - Apply tenancy, ACLs, row-level security, query whitelisting, or any other policy. http-sql is transport, not policy.
 
-### 10.2 Client conformance
+### 10.2 Clients
 
-A v0.2 conforming client MUST:
+A client at this draft MUST:
 
 1. Send `Content-Type: application/json`.
 2. Send exactly one of `sql` or `batch` in the request body.
@@ -285,19 +300,22 @@ A v0.2 conforming client MUST:
 5. On a non-atomic batch error, treat the statements preceding `error.statementIndex` as applied (section 6.2.1). A client MUST NOT assume no statements were applied.
 6. Not require any vendor-specific request or response fields beyond those defined here.
 
-A v0.2 conforming client SHOULD:
+A client at this draft SHOULD:
 
-- Send the `X-Http-Sql-Accept-Version` header.
+- Send the `Http-Sql-Accept-Version` header.
 - Treat `error.code` values it does not recognize as the closest registered code by HTTP status family.
 
 ## 11. Versioning policy
 
-This spec uses `<major>.<minor>` versioning. Until `1.0`, the minor version increments on any breaking change. After `1.0`, breaking changes increment the major version. Additive changes (new optional fields, new registered types, new registered error codes) increment the minor version.
+This spec is at `0.0.1`. The first two drafts were numbered `0.1` and `0.2` before the spec had earned a number; that was premature, and the count restarted. Numbers below `0.1` mean thinking-stage: any part of the wire format may change, and no server or client should pin to it.
+
+From here: `<major>.<minor>.<patch>`. While the major is `0`, the patch increments on any edit to the draft, the minor increments when the shape has been dogfooded by a second, independent implementation, and `1.0` is the first number a server may build a product on. After `1.0`, breaking changes increment the major, additive changes (new optional fields, new registered types, new registered error codes) increment the minor, and editorial fixes increment the patch.
 
 ### Version history
 
-- **0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
-- **0.1** — initial draft.
+- **0.0.1** — the count restarted at thinking-stage. Edits in this draft: `application/http-sql+json` defined as the http-sql media type, with `application/json` accepted as a request alias (section 2); optional `QUERY` read binding with `Accept-Query` discovery (section 2.1); version headers renamed `Http-Sql-Version` / `Http-Sql-Accept-Version`, `X-` forms deprecated per RFC 6648 (section 9); recommended server policy added as non-normative section 12.1; IANA intent stated (section 13). All additive to the previous draft: a server that adds the two new response headers and accepts the new request media type needs nothing else.
+- **formerly 0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
+- **formerly 0.1** — initial draft.
 
 ## 12. Security considerations
 
@@ -306,9 +324,29 @@ http-sql carries arbitrary SQL strings. Servers MUST treat the SQL as untrusted 
 - A bearer token authenticates the caller but does not authorize arbitrary SQL. Servers SHOULD reject or rewrite statements that violate policy (tenancy, ACLs, allowlists) before execution.
 - SQL parameters are passed positionally and SHOULD be bound to prepared statements server-side. Servers MUST NOT interpolate parameters into the SQL string before binding.
 - Servers SHOULD enforce statement timeouts, result size limits, and rate limiting independent of the wire format.
+- A `QUERY` request (section 2.1) asserts to caches and intermediaries that the response is safe to reuse. A server that cannot tell whether a statement writes SHOULD treat that assertion as the client's responsibility and MUST NOT weaken its own authorization because the method was `QUERY`.
 
 The spec does not define encryption-at-rest or transport security. Implementations SHOULD use HTTPS.
 
+### 12.1 Recommended server policy (non-normative)
+
+Most database vendors chose schema-mapped endpoints over raw SQL on the grounds that SQL from an HTTP client is a liability. http-sql is transport, not policy, so the answer lives in the server. A server that wants to expose http-sql to untrusted callers and stay sane needs no new protocol, only these ordinary controls, each of which is one of the registered error codes when it fires:
+
+| Control | How | Error when refused |
+|---|---|---|
+| One database per token | Bind the bearer token to exactly one database (a per-tenant SQLite, a schema, a role). The SQL cannot name anything the token does not own, because nothing else is reachable. | `permission_error` (403) |
+| Least-privilege database role | Run the statement as a role that can only do what the token is for: read-only tokens get a read-only role, never superuser. | `permission_error` (403) |
+| Read-only mode | For read tokens, execute inside a read-only transaction or a connection opened read-only, so a write fails in the engine rather than in a SQL parser you had to write. | `not_allowed` (400) |
+| Statement allowlist | Where the client is your own code, accept only known statement texts (or hashes) and bind parameters; reject everything else. | `not_allowed` (400) |
+| Limits | Statement timeout, maximum rows, maximum body size, requests per second per token. | `payload_too_large` (413), `rate_limited` (429) |
+| No sniffing | Reject a missing or wrong `Content-Type` before reading the body (section 2). | `unsupported_media_type` (415) |
+
+The pattern is that the engine enforces policy, not a parser in front of it. A server that rewrites SQL to add tenancy predicates is doing something http-sql does not ask for and cannot verify; a per-tenant database or role achieves the same isolation with nothing to get wrong.
+
 ## 13. IANA considerations
 
-None at this stage. A future revision may register a media type (`application/http-sql+json`) and well-known URI suffix.
+This version defines the media type `application/http-sql+json` (section 2) and uses it unregistered, the same practice as `application/graphql-response+json` in the GraphQL-over-HTTP draft. The editors intend to register it in the standards tree ([RFC 6838](https://www.rfc-editor.org/rfc/rfc6838) section 3.1) when this specification is submitted as an RFC. It will not be registered in the vendor tree (`vnd.`), because the name of a vendor-neutral format should not carry a vendor.
+
+Considered and declined: a direct binding using `application/sql` ([RFC 6922](https://www.rfc-editor.org/rfc/rfc6922)), carrying a bare statement with no envelope. It cannot carry parameters, which section 12 says SHOULD be bound rather than interpolated, and it would be a second request shape in a format whose value is having one.
+
+A well-known URI suffix may be defined in a future revision.

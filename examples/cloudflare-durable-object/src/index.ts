@@ -1,4 +1,4 @@
-// http-sql v0.2 over Cloudflare Durable Objects, with Hono.
+// http-sql 0.0.1 over Cloudflare Durable Objects, with Hono.
 //
 // Each tenant maps to its own DO instance, and each DO holds its own real
 // SQLite via ctx.storage.sql. The Worker is just a router: validate the
@@ -17,14 +17,20 @@ export interface Env {
   TENANT_TOKEN_BOB: string;
 }
 
-const VERSION = "0.2";
+const VERSION = "0.0.1";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors({ origin: "*", allowMethods: ["POST", "OPTIONS"] }));
 app.use("*", async (c, next) => {
   await next();
+  // SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along until 1.0 for older clients.
+  c.res.headers.set("Http-Sql-Version", VERSION);
   c.res.headers.set("X-Http-Sql-Version", VERSION);
+  // SPEC.md section 2: responses use the http-sql media type.
+  if (c.res.headers.get("content-type")?.startsWith("application/json")) {
+    c.res.headers.set("content-type", "application/http-sql+json");
+  }
 });
 
 app.post("/sql", async (c) => {
@@ -32,7 +38,7 @@ app.post("/sql", async (c) => {
   if (!tenant) return c.json({ error: { code: "auth_error", message: "missing or invalid bearer token" } }, 401);
 
   if (!isJsonMediaType(c.req.header("content-type"))) {
-    return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+    return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/http-sql+json or application/json" } }, 415);
   }
 
   const id = c.env.TENANT_DO.idFromName(tenant);
@@ -47,10 +53,12 @@ app.onError((err, c) => {
 
 export default app;
 
-// SPEC.md section 2: only the media type is significant, so parameters such as
-// `charset=utf-8` are ignored.
+// SPEC.md section 2: application/http-sql+json and application/json are interchangeable on
+// requests; only the media type is significant, so parameters such as `charset=utf-8` are ignored.
+const REQUEST_MEDIA_TYPES = new Set(["application/http-sql+json", "application/json"]);
 function isJsonMediaType(header: string | undefined): boolean {
-  return header?.split(";")[0].trim().toLowerCase() === "application/json";
+  const mediaType = header?.split(";")[0].trim().toLowerCase();
+  return mediaType !== undefined && REQUEST_MEDIA_TYPES.has(mediaType);
 }
 
 function resolveTenant(header: string, env: Env): string | null {
@@ -63,7 +71,7 @@ function resolveTenant(header: string, env: Env): string | null {
 
 // =============================================================================
 // TenantDO: one Durable Object per tenant. Holds a real SQLite database via
-// ctx.storage.sql. Receives http-sql v0.2 envelopes from the router and runs
+// ctx.storage.sql. Receives http-sql 0.0.1 envelopes from the router and runs
 // them against its own SQLite. All access for a given tenant is serialized
 // through this single instance.
 // =============================================================================
@@ -147,7 +155,8 @@ export class TenantDO {
 }
 
 const JSON_HEADERS = {
-  "content-type": "application/json",
+  "content-type": "application/http-sql+json",
+  "Http-Sql-Version": VERSION,
   "X-Http-Sql-Version": VERSION,
 };
 
@@ -169,7 +178,7 @@ function decodeParam(value: unknown): unknown {
 // ctx.storage.sql returned, which is only sufficient because the value survived
 // the driver.
 //
-// KNOWN NON-CONFORMANCE (spec 6.1, conformance case V-1): SqlStorage has no
+// KNOWN FAILURE (spec 6.1, check V-1): SqlStorage has no
 // lossless integer mode. The Durable Objects storage docs state that "any
 // numeric value in a column is affected by JavaScript's 52-bit precision for
 // numbers. If you store a very large number (in int64), then retrieve the same
