@@ -16,14 +16,17 @@ interface Result {
   lastInsertId?: string | number | null;
 }
 
-const VERSION_HEADER = { "X-Http-Sql-Version": "0.2" };
-const JSON_HEADERS = { "content-type": "application/json", ...VERSION_HEADER };
+const VERSION = "0.3";
+// SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along through 0.x for 0.2 clients.
+const VERSION_HEADER = { "Http-Sql-Version": VERSION, "X-Http-Sql-Version": VERSION };
+// SPEC.md section 2: responses use the http-sql media type.
+const JSON_HEADERS = { "content-type": "application/http-sql+json", ...VERSION_HEADER };
 
 export async function handle(req: Request, auth: (req: Request) => boolean): Promise<Response> {
   if (!auth(req)) return errorResponse(401, "auth_error", "missing or invalid bearer token");
   if (req.method !== "POST") return errorResponse(405, "bad_request", "POST required");
   if (!isJsonMediaType(req.headers.get("content-type"))) {
-    return errorResponse(415, "unsupported_media_type", "Content-Type must be application/json");
+    return errorResponse(415, "unsupported_media_type", "Content-Type must be application/http-sql+json or application/json");
   }
 
   let body: RequestBody;
@@ -51,10 +54,12 @@ export async function handle(req: Request, auth: (req: Request) => boolean): Pro
   }
 }
 
-// SPEC.md section 2: only the media type is significant, so parameters such as
-// `charset=utf-8` are ignored.
+// SPEC.md section 2: application/http-sql+json and application/json are interchangeable on
+// requests; only the media type is significant, so parameters such as `charset=utf-8` are ignored.
+const REQUEST_MEDIA_TYPES = new Set(["application/http-sql+json", "application/json"]);
 function isJsonMediaType(header: string | null): boolean {
-  return header?.split(";")[0].trim().toLowerCase() === "application/json";
+  const mediaType = header?.split(";")[0].trim().toLowerCase();
+  return mediaType !== undefined && REQUEST_MEDIA_TYPES.has(mediaType);
 }
 
 // Replace these with calls to your actual database client.

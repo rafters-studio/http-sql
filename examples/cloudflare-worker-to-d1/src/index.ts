@@ -24,14 +24,20 @@ interface StatementResult {
   lastInsertId?: string | null;
 }
 
-const VERSION = "0.2";
+const VERSION = "0.3";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors({ origin: "*", allowMethods: ["POST", "OPTIONS"] }));
 app.use("*", async (c, next) => {
   await next();
+  // SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along through 0.x.
+  c.res.headers.set("Http-Sql-Version", VERSION);
   c.res.headers.set("X-Http-Sql-Version", VERSION);
+  // SPEC.md section 2: responses use the http-sql media type.
+  if (c.res.headers.get("content-type")?.startsWith("application/json")) {
+    c.res.headers.set("content-type", "application/http-sql+json");
+  }
 });
 
 app.post(
@@ -39,7 +45,7 @@ app.post(
   async (c, next) => bearerAuth({ token: c.env.HTTP_SQL_TOKEN })(c, next),
   async (c) => {
     if (!isJsonMediaType(c.req.header("content-type"))) {
-      return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/json" } }, 415);
+      return c.json({ error: { code: "unsupported_media_type", message: "Content-Type must be application/http-sql+json or application/json" } }, 415);
     }
 
     let body: SingleRequest | BatchRequest;
@@ -122,10 +128,12 @@ function projectD1Result(res: D1Result): StatementResult {
   };
 }
 
-// SPEC.md section 2: only the media type is significant, so parameters such as
-// `charset=utf-8` are ignored.
+// SPEC.md section 2: application/http-sql+json and application/json are interchangeable on
+// requests; only the media type is significant, so parameters such as `charset=utf-8` are ignored.
+const REQUEST_MEDIA_TYPES = new Set(["application/http-sql+json", "application/json"]);
 function isJsonMediaType(header: string | undefined): boolean {
-  return header?.split(";")[0].trim().toLowerCase() === "application/json";
+  const mediaType = header?.split(";")[0].trim().toLowerCase();
+  return mediaType !== undefined && REQUEST_MEDIA_TYPES.has(mediaType);
 }
 
 // Tagged values per SPEC.md section 5.
@@ -142,7 +150,7 @@ function decodeParam(value: unknown): unknown {
 // Response encoding per SPEC.md section 6.1. This branches on the runtime type
 // D1 returned, which is only sufficient because the value survived the driver.
 //
-// KNOWN NON-CONFORMANCE (spec 6.1, conformance case V-1): D1 stores 64-bit
+// KNOWN FAILURE (spec 6.1, check V-1): D1 stores 64-bit
 // INTEGERs but its Workers binding has no lossless mode -- there is no option,
 // method, or compatibility flag that makes it return a BigInt, so an integer
 // above 2^53 comes back as an already-rounded double and reaches this function
