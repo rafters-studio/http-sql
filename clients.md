@@ -25,6 +25,7 @@ The one place clients differ is what a tagged `bigint` and `blob` become. Each c
 | Rust | `i64` (or `i128` if a server sends past 64 bits) | `Vec<u8>` | serde untagged enum over the value shapes |
 | Python | `int` | `bytes` | Python ints are arbitrary precision; the tag still matters for encoding on the way out |
 | C# | `long` | `byte[]` | `System.Text.Json`; Unity needs the `UnityWebRequest` transport, not `HttpClient` |
+| C++ (Unreal) | `int64` | `TArray<uint8>` | `FHttpModule` and the engine's `FJsonObject`; no third-party JSON, no STL types on the Blueprint surface |
 | Go | `int64` | `[]byte` | `encoding/json` with a custom unmarshaler for the tagged forms |
 | Swift | `Int64` | `Data` | `URLSession`; Codable with a custom decoder for the tagged forms |
 | Kotlin | `Long` | `ByteArray` | `okhttp` or `ktor`; kotlinx.serialization |
@@ -39,6 +40,7 @@ Ordered by where http-sql traffic actually originates.
 | Rust | Native and wasm32 | CLIs, daemons, embedded engines, the C-ABI base for game engines | `http-sql` on crates.io | smugglr's own profile is a Rust client already; a standalone crate is the one other clients bind to (C-ABI for Unreal, wasm for the browser). Ships with a tiny `http-sql` binary so a shell or an agent can run a statement without writing code. |
 | Python | CPython 3.10+ | Data and analytics scripts, notebooks, agent frameworks | `http-sql` on PyPI | The second-largest source of "send SQL, get rows" traffic after JS, and the language agents are written in. `httpx` optional, `urllib` default so it installs with nothing. |
 | C# | .NET Standard 2.1, Unity 2021+ | Unity games (the games segment), .NET services | `HttpSql` on NuGet, plus a Unity package (UPM) | Games are the first segment fence targets and Unity is where they are built. The Unity package uses `UnityWebRequest` and a main-thread-safe callback so it does not block the render loop. |
+| Unreal (C++) | UE 5.x and 6 | Unreal games, the other half of the games segment | `HttpSql` plugin on Fab (and the repo) | The same reason as Unity. A native engine plugin: `FHttpModule` for transport, `FJsonObject` for the envelope, `int64` and `TArray<uint8>` for the tagged forms, results delivered on the game thread, and a Blueprint-callable node so a designer can run a statement without C++. Written against the spec directly; it does not wait on the Rust C-ABI. |
 | Drizzle driver | TypeScript | Anyone already on Drizzle at the edge | `@http-sql/drizzle` | The adoption lever the prior-art research found: PlanetScale implemented Neon's undocumented endpoint because Neon's driver had users. A Drizzle HTTP driver (the shape of `drizzle-orm/neon-http`) makes every Drizzle app an http-sql client with one import. |
 | Kysely dialect | TypeScript | Anyone already on Kysely | `@http-sql/kysely` | Same lever, second-most-used TS query builder at the edge. Small; shares the core client. |
 | MCP server | Node | A customer's agent (Claude, or any MCP host) | `@http-sql/mcp` | The "customer's agent calls fence directly" persona needs a tool, not a library. One tool, `query`, with the endpoint and token from config. Thin over the TS client. |
@@ -48,7 +50,7 @@ Ordered by where http-sql traffic actually originates.
 | Client | Why not day one |
 |---|---|
 | Go | Real audience (infra CLIs, Go backends) but not where our first segments originate. Ships once the Tier 1 shape has settled, so it copies rather than invents. |
-| Unreal (C++) | Binds the Rust crate's C-ABI rather than being written twice; waits on that ABI, which smugglr-core is defining for its own engine SDKs. Pure UE (`FHttpModule` + JSON) is a fallback if the ABI slips. |
+| Unreal on the Rust C-ABI | Not a second client: once smugglr-core's C-ABI exists, the Unreal plugin may switch its transport to the shared Rust crate so the two engines share one implementation. The Tier 1 plugin ships first on `FHttpModule` and does not wait. |
 | Swift | Native iOS and macOS apps and games not on Unity. After C#. |
 | Kotlin | Native Android and JVM. After Swift, same shape. |
 | Neon-driver compatibility | Not a client: a server-side adapter so the existing `@neondatabase/serverless` driver's `fetchEndpoint` works against an http-sql server. Worth having for exactly the reason Drizzle is, but it lives in a server, not here. |
