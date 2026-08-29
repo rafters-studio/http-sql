@@ -44,6 +44,7 @@ The PostgreSQL wire protocol is a streaming socket protocol — not HTTP, not ed
 - [examples/](./examples) — curl invocations, reference client and server, and two full Cloudflare implementations (D1-backed and Durable-Object-backed)
 - [checks/](./checks) — the checks a server passes to call itself http-sql 0.0.1
 - [implementations.md](./implementations.md) — known servers and clients
+- [clients.md](./clients.md) — the day-one clients we supply, the rule they all follow, and the lossless type per language
 
 ## Prior art
 
