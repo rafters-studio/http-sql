@@ -82,7 +82,7 @@ This is the point: Bob isn't filtered out of Alice's table -- the table genuinel
 | SQL execution        | `ctx.storage.sql.exec(sql, ...params)` against the DO's own SQLite.         |
 | Atomic batches       | `ctx.storage.transactionSync(() => batch.map(...))`.                        |
 | Tagged params/values | `blob` (base64 <-> `Uint8Array`), `bigint` (string <-> `BigInt`).           |
-| Version header       | `Http-Sql-Version: 0.3` (and the deprecated `X-Http-Sql-Version`) on every response.                                |
+| Version header       | `Http-Sql-Version: 0.2` (and the deprecated `X-Http-Sql-Version`) on every response.                                |
 
 ## What this Worker does NOT do (yet)
 

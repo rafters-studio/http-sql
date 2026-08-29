@@ -1,6 +1,6 @@
 # http-sql checks
 
-An http-sql v0.3 server passes the checks below when probed at its endpoint URL with a valid bearer token.
+An http-sql v0.2 server passes the checks below when probed at its endpoint URL with a valid bearer token.
 
 This directory will contain a runnable TypeScript test suite. The current document defines the test cases that runner must implement, so server implementers can self-check before installing the runner.
 
@@ -85,13 +85,13 @@ Servers on a non-SQLite backend substitute their dialect's literal syntax for th
 
 | ID    | Description                                                      | Expected response                           |
 |-------|------------------------------------------------------------------|---------------------------------------------|
-| H-1   | Any successful response                                          | Includes `Http-Sql-Version: 0.3`          |
-| H-2   | Any error response                                               | Includes `Http-Sql-Version: 0.3`          |
+| H-1   | Any successful response                                          | Includes `Http-Sql-Version: 0.2`          |
+| H-2   | Any error response                                               | Includes `Http-Sql-Version: 0.2`          |
 
 ## Optional / "nice to have"
 
 - `QUERY` accepted at the endpoint with the same body and envelopes as `POST` (spec 2.1); responses carry `Accept-Query: application/http-sql+json`.
-- Responses also carry the deprecated `X-Http-Sql-Version` through the `0.x` series so `0.2` clients keep working.
+- Responses also carry the deprecated `X-Http-Sql-Version` through the `0.x` series so existing clients keep working.
 - Vendor error codes carry the `vendor:` prefix.
 - `lastInsertId` is populated for INSERT statements where the SQL engine reports it, as a JSON string (integer ids as decimal strings) or `null` — never a JSON number.
 - Rate-limited responses return `error.code` = `rate_limited` and HTTP 429.

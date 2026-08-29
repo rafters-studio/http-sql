@@ -24,7 +24,7 @@ interface StatementResult {
   lastInsertId?: string | null;
 }
 
-const VERSION = "0.3";
+const VERSION = "0.2";
 
 const app = new Hono<{ Bindings: Env }>();
 

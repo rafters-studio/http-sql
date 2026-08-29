@@ -16,7 +16,7 @@ interface Result {
   lastInsertId?: string | number | null;
 }
 
-const VERSION = "0.3";
+const VERSION = "0.2";
 // SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along through 0.x for 0.2 clients.
 const VERSION_HEADER = { "Http-Sql-Version": VERSION, "X-Http-Sql-Version": VERSION };
 // SPEC.md section 2: responses use the http-sql media type.

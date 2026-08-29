@@ -4,7 +4,7 @@ An HTTP wire format for SQL.
 
 POST a SQL statement and parameters to an endpoint, get rows back. Stateless, edge-friendly, JSON over HTTP. Nothing more.
 
-**Status:** v0.3 draft. The spec is being dogfooded against working implementations before being proposed as an RFC. Breaking changes possible until v1.0.
+**Status:** v0.2 draft, still being thought through. The spec is being dogfooded against working implementations before being proposed as an RFC. Breaking changes possible until v1.0.
 
 ## The problem this solves
 
@@ -20,7 +20,7 @@ The PostgreSQL wire protocol is a streaming socket protocol — not HTTP, not ed
 
 `http-sql` is that one format.
 
-## Goals (v0.3)
+## Goals (v0.2)
 
 - **One canonical request/response shape** that works for SELECT, INSERT, UPDATE, DELETE, DDL, and batched statements.
 - **Stateless HTTP**. No sessions, no connection objects, no websocket upgrades. One request, one response.
@@ -29,9 +29,9 @@ The PostgreSQL wire protocol is a streaming socket protocol — not HTTP, not ed
 - **Vendor-neutral**. The spec doesn't mention any specific database or platform.
 - **JSON-native parameters and results**. Strings, numbers, booleans, null, with a tagged form for blobs and other extended types.
 
-## Non-goals (v0.3)
+## Non-goals (v0.2)
 
-- **Streaming large result sets.** Pagination is the v0.3 answer. SSE / chunked responses can come in a later revision.
+- **Streaming large result sets.** Pagination is the v0.2 answer. SSE / chunked responses can come in a later revision.
 - **Cross-request transactions.** One request is one autocommit unit. Batch requests can opt into atomicity. Multi-request transactions need session state and break statelessness; out of scope.
 - **Schema management primitives.** DDL is allowed as a normal SQL statement; the spec doesn't add `CREATE TABLE` helpers.
 - **Authentication scheme.** Use HTTP auth headers. `Bearer` is recommended but the spec doesn't mandate.
@@ -42,7 +42,7 @@ The PostgreSQL wire protocol is a streaming socket protocol — not HTTP, not ed
 
 - [SPEC.md](./SPEC.md) — the wire format definition
 - [examples/](./examples) — curl invocations, reference client and server, and two full Cloudflare implementations (D1-backed and Durable-Object-backed)
-- [checks/](./checks) — the checks a server passes to call itself http-sql v0.3
+- [checks/](./checks) — the checks a server passes to call itself http-sql v0.2
 - [implementations.md](./implementations.md) — known servers and clients
 
 ## Prior art

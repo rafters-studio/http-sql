@@ -73,7 +73,7 @@ Response to the SELECT:
 | 5. Parameter types      | JSON primitives pass through. `{$type: "blob", ...}` decodes to `Uint8Array`. `{$type: "bigint", ...}` to a JS `BigInt`. Binary results re-encode on the way out. |
 | 6. Success responses    | Columns derived from the first row's keys (D1 returns objects); rows are remapped to the spec's array-of-arrays shape. |
 | 7. Error responses      | Maps validation errors to `bad_request`, missing auth to `auth_error`, runtime SQL errors to `sql_error`. |
-| 9. Version negotiation  | Every response carries `Http-Sql-Version: 0.3` (and the deprecated `X-Http-Sql-Version`).                                   |
+| 9. Version negotiation  | Every response carries `Http-Sql-Version: 0.2` (and the deprecated `X-Http-Sql-Version`).                                   |
 
 ## What this Worker does NOT do
 

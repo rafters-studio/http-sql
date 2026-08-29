@@ -17,7 +17,7 @@ export interface Env {
   TENANT_TOKEN_BOB: string;
 }
 
-const VERSION = "0.3";
+const VERSION = "0.2";
 
 const app = new Hono<{ Bindings: Env }>();
 
