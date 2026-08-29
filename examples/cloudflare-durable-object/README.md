@@ -1,6 +1,6 @@
 # cloudflare-durable-object
 
-Each tenant is its own real SQLite database at the edge. http-sql v0.1 in front, Cloudflare Durable Objects with [SQLite-backed storage](https://developers.cloudflare.com/durable-objects/api/sql-storage/) underneath.
+Each tenant is its own real SQLite database at the edge. http-sql 0.0.1 in front, Cloudflare Durable Objects with [SQLite-backed storage](https://developers.cloudflare.com/durable-objects/api/sql-storage/) underneath.
 
 ## The shape
 
@@ -8,7 +8,7 @@ Each tenant is its own real SQLite database at the edge. http-sql v0.1 in front,
 +-------------+         +---------------------+         +-----------------------------------+
 | any client  |  HTTPS  |  Worker (Hono)      |  RPC    |  TenantDO (Alice)                  |
 | http-sql    |-------> |  - bearer -> tenant |-------> |  - ctx.storage.sql                 |
-| v0.1        |         |  - route to DO      |         |  - real SQLite, alice's data only  |
+| 0.0.1       |         |  - route to DO      |         |  - real SQLite, alice's data only  |
 +-------------+         +---------------------+   |     +-----------------------------------+
                                                   |
                                                   |     +-----------------------------------+
@@ -82,7 +82,7 @@ This is the point: Bob isn't filtered out of Alice's table -- the table genuinel
 | SQL execution        | `ctx.storage.sql.exec(sql, ...params)` against the DO's own SQLite.         |
 | Atomic batches       | `ctx.storage.transactionSync(() => batch.map(...))`.                        |
 | Tagged params/values | `blob` (base64 <-> `Uint8Array`), `bigint` (string <-> `BigInt`).           |
-| Version header       | `Http-Sql-Version: 0.2` (and the deprecated `X-Http-Sql-Version`) on every response.                                |
+| Version header       | `Http-Sql-Version: 0.0.1` (and the deprecated `X-Http-Sql-Version`) on every response.                                |
 
 ## What this Worker does NOT do (yet)
 

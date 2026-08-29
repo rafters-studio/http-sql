@@ -1,4 +1,4 @@
-// Reference http-sql v0.2 server, ~80 lines.
+// Reference http-sql 0.0.1 server, ~80 lines.
 //
 // Runs on any platform with `fetch`-style Request/Response (Workers, Deno,
 // Bun, Node 20+ with the undici fetch globals). The SQL execution is faked
@@ -16,8 +16,8 @@ interface Result {
   lastInsertId?: string | number | null;
 }
 
-const VERSION = "0.2";
-// SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along through 0.x for 0.2 clients.
+const VERSION = "0.0.1";
+// SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along until 1.0 for older clients.
 const VERSION_HEADER = { "Http-Sql-Version": VERSION, "X-Http-Sql-Version": VERSION };
 // SPEC.md section 2: responses use the http-sql media type.
 const JSON_HEADERS = { "content-type": "application/http-sql+json", ...VERSION_HEADER };

@@ -1,7 +1,7 @@
-// http-sql v0.2 over Cloudflare D1, with Hono.
+// http-sql 0.0.1 over Cloudflare D1, with Hono.
 //
-// POST any http-sql v0.2 request to this Worker; it runs the SQL against the
-// bound D1 database and returns a v0.2 response. Tagged params (blob, bigint)
+// POST any http-sql 0.0.1 request to this Worker; it runs the SQL against the
+// bound D1 database and returns a 0.0.1 response. Tagged params (blob, bigint)
 // are decoded before binding; binary results are re-encoded going out.
 
 import { Hono } from "hono";
@@ -24,14 +24,14 @@ interface StatementResult {
   lastInsertId?: string | null;
 }
 
-const VERSION = "0.2";
+const VERSION = "0.0.1";
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors({ origin: "*", allowMethods: ["POST", "OPTIONS"] }));
 app.use("*", async (c, next) => {
   await next();
-  // SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along through 0.x.
+  // SPEC.md section 9: Http-Sql-Version is the header; X-Http-Sql-Version rides along until 1.0 for older clients.
   c.res.headers.set("Http-Sql-Version", VERSION);
   c.res.headers.set("X-Http-Sql-Version", VERSION);
   // SPEC.md section 2: responses use the http-sql media type.

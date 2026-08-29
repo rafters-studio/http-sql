@@ -1,8 +1,8 @@
-# http-sql v0.2
+# http-sql 0.0.1
 
 An HTTP wire format for submitting a SQL statement and receiving a result set.
 
-**Status:** Draft, v0.2. Still being thought through; expect the shape to move.
+**Status:** 0.0.1, a thinking-stage draft. Nothing here is settled; expect the shape to move.
 **Editor:** [@rafters-studio](https://github.com/rafters-studio)
 **License:** MIT
 
@@ -129,7 +129,7 @@ For values that cannot be represented as a JSON primitive (binary blobs, integer
 - `$type` (REQUIRED, string) — one of the registered types listed below, or a vendor-namespaced type (`vendor:<name>`).
 - `$value` (REQUIRED) — the encoded value as a JSON value.
 
-Registered types in v0.2:
+Registered types in this draft:
 
 | `$type`  | `$value` encoding                                      |
 |----------|--------------------------------------------------------|
@@ -227,7 +227,7 @@ HTTP status: `4xx` or `5xx`.
 - `error.message` (REQUIRED, string) — human-readable explanation. Servers SHOULD avoid leaking sensitive details.
 - `error.statementIndex` (REQUIRED for non-atomic batch statement failures, otherwise OPTIONAL, integer) — the zero-based index of the statement that failed. For a non-atomic batch failure it is the client's only means of determining which statements persisted (section 6.2.1), so it MUST be present. MUST be omitted for single-statement requests.
 
-Registered error codes in v0.2:
+Registered error codes in this draft:
 
 | `code`                   | HTTP | Meaning                                                         |
 |--------------------------|------|-----------------------------------------------------------------|
@@ -241,37 +241,37 @@ Registered error codes in v0.2:
 | `rate_limited`           | 429  | Too many requests.                                              |
 | `internal_error`         | 500  | Server malfunction.                                             |
 
-`unsupported_media_type` was introduced in v0.2 (per section 11, a new registered error code is an additive change that increments the minor version). It is not available to a server that advertises `0.1`.
+`unsupported_media_type` was added in the second draft (formerly numbered 0.2); a server still on the first draft does not send it.
 
 Vendor codes carry the prefix `vendor:` (e.g. `vendor:cf_d1_quota_exceeded`). Clients SHOULD treat unknown `error.code` values as if they were the closest registered code by HTTP status family.
 
 ## 8. Pagination
 
-http-sql v0.2 does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
+This draft does not define pagination. Servers SHOULD enforce a server-defined maximum result row count and return `payload_too_large` if exceeded, with `error.message` suggesting `LIMIT` / `OFFSET` in the SQL. Cursor-based pagination is being considered for a future revision.
 
 ## 9. Version negotiation
 
 Servers MUST include the response header:
 
 ```
-Http-Sql-Version: 0.2
+Http-Sql-Version: 0.0.1
 ```
 
-on every response (including error responses). Through the `0.x` series servers SHOULD also send the old name, `X-Http-Sql-Version`, with the same value, so existing clients keep working; the `X-` form is deprecated and will not be sent by `1.0` servers. [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) deprecates the `X-` prefix for new header fields.
+on every response (including error responses). Until `1.0` servers SHOULD also send the old name, `X-Http-Sql-Version`, with the same value, so existing clients keep working; the `X-` form is deprecated and will not be sent by `1.0` servers. [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) deprecates the `X-` prefix for new header fields.
 
 Clients MAY send the request header:
 
 ```
-Http-Sql-Accept-Version: 0.2
+Http-Sql-Accept-Version: 0.0.1
 ```
 
-to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior and MUST accept the deprecated `X-Http-Sql-Accept-Version` as a synonym through the `0.x` series. v0.2 servers ignore the header.
+to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior and MUST accept the deprecated `X-Http-Sql-Accept-Version` as a synonym until `1.0`. Servers at this draft ignore the header.
 
 ## 10. What a server and a client must do
 
 ### 10.1 Servers
 
-A v0.2 server MUST:
+A server at this draft MUST:
 
 1. Accept POST requests with `Content-Type: application/http-sql+json` or `application/json` at one or more endpoint URLs, respond with `application/http-sql+json`, and reject other media types per section 2.
 2. Accept both single-statement (section 4.1) and batch (section 4.2) request shapes.
@@ -283,7 +283,7 @@ A v0.2 server MUST:
 8. Accept the registered parameter types in section 5 (`blob`, `bigint`).
 9. Emit the `Http-Sql-Version` response header (section 9).
 
-A v0.2 server MAY:
+A server at this draft MAY:
 
 - Accept additional vendor-namespaced parameter types or error codes.
 - Accept the `QUERY` method as a read binding (section 2.1) and advertise it with `Accept-Query`.
@@ -291,7 +291,7 @@ A v0.2 server MAY:
 
 ### 10.2 Clients
 
-A v0.2 client MUST:
+A client at this draft MUST:
 
 1. Send `Content-Type: application/json`.
 2. Send exactly one of `sql` or `batch` in the request body.
@@ -300,20 +300,22 @@ A v0.2 client MUST:
 5. On a non-atomic batch error, treat the statements preceding `error.statementIndex` as applied (section 6.2.1). A client MUST NOT assume no statements were applied.
 6. Not require any vendor-specific request or response fields beyond those defined here.
 
-A v0.2 client SHOULD:
+A client at this draft SHOULD:
 
 - Send the `Http-Sql-Accept-Version` header.
 - Treat `error.code` values it does not recognize as the closest registered code by HTTP status family.
 
 ## 11. Versioning policy
 
-This spec uses `<major>.<minor>` versioning. Until `1.0`, the minor version increments on any breaking change. After `1.0`, breaking changes increment the major version. Additive changes (new optional fields, new registered types, new registered error codes) increment the minor version.
+This spec is at `0.0.1`. The first two drafts were numbered `0.1` and `0.2` before the spec had earned a number; that was premature, and the count restarted. Numbers below `0.1` mean thinking-stage: any part of the wire format may change, and no server or client should pin to it.
+
+From here: `<major>.<minor>.<patch>`. While the major is `0`, the patch increments on any edit to the draft, the minor increments when the shape has been dogfooded by a second, independent implementation, and `1.0` is the first number a server may build a product on. After `1.0`, breaking changes increment the major, additive changes (new optional fields, new registered types, new registered error codes) increment the minor, and editorial fixes increment the patch.
 
 ### Version history
 
-- **Unreleased draft edits** (not a version; the spec is still being thought through) — `application/http-sql+json` defined as the http-sql media type, with `application/json` accepted as a request alias (section 2); optional `QUERY` read binding with `Accept-Query` discovery (section 2.1); version headers renamed `Http-Sql-Version` / `Http-Sql-Accept-Version`, `X-` forms deprecated per RFC 6648 (section 9); recommended server policy added as non-normative section 12.1; IANA intent stated (section 13). All additive to the 0.2 draft: a server that adds the two new response headers and accepts the new request media type needs nothing else.
-- **0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
-- **0.1** — initial draft.
+- **0.0.1** — the count restarted at thinking-stage. Edits in this draft: `application/http-sql+json` defined as the http-sql media type, with `application/json` accepted as a request alias (section 2); optional `QUERY` read binding with `Accept-Query` discovery (section 2.1); version headers renamed `Http-Sql-Version` / `Http-Sql-Accept-Version`, `X-` forms deprecated per RFC 6648 (section 9); recommended server policy added as non-normative section 12.1; IANA intent stated (section 13). All additive to the previous draft: a server that adds the two new response headers and accepts the new request media type needs nothing else.
+- **formerly 0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
+- **formerly 0.1** — initial draft.
 
 ## 12. Security considerations
 
