@@ -74,6 +74,41 @@ Response:
 }
 ```
 
+## Describe a table
+
+Optional: a server that does not implement `describe` answers `400` with `bad_request`.
+
+```sh
+curl -X POST "$ENDPOINT" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"describe": "notes"}'
+```
+
+Response:
+
+```json
+{
+  "columns": [
+    {"name": "id", "type": "TEXT", "key": 1},
+    {"name": "tenant_id", "type": "TEXT", "key": 0},
+    {"name": "body", "type": "TEXT", "key": 0}
+  ],
+  "generatedKey": false
+}
+```
+
+`{"describe": "notez"}`, naming a table that does not exist or that the token cannot see, answers `403`:
+
+```json
+{
+  "error": {
+    "code": "permission_error",
+    "message": "cannot describe table 'notez'"
+  }
+}
+```
+
 ## Blob parameter (tagged value)
 
 ```sh
