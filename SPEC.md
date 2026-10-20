@@ -1,8 +1,8 @@
-# http-sql 0.0.1
+# http-sql 0.0.2
 
 An HTTP wire format for submitting a SQL statement and receiving a result set.
 
-**Status:** 0.0.1, a thinking-stage draft. Nothing here is settled; expect the shape to move.
+**Status:** 0.0.2, a thinking-stage draft. Nothing here is settled; expect the shape to move.
 **Editor:** [@rafters-studio](https://github.com/rafters-studio)
 **License:** MIT
 
@@ -50,7 +50,9 @@ Authentication failures MUST return the response defined in section 7 with `erro
 
 ## 4. Request shapes
 
-A request body MUST be a JSON object containing **either** a `sql` field (single statement) **or** a `batch` field (multiple statements), not both. A request containing both or neither MUST be rejected with `error.code` of `bad_request` and HTTP status `400`.
+A request body MUST be a JSON object containing exactly one of a `sql` field (single statement, section 4.1), a `batch` field (multiple statements, section 4.2), or a `describe` field (a table's shape, section 4.3). A request containing more than one of them, or none, MUST be rejected with `error.code` of `bad_request` and HTTP status `400`.
+
+The `describe` shape is OPTIONAL for servers (section 10.1). A server that does not implement it MUST treat a `describe` request as a request containing none of the three fields, and so reject it with `bad_request` and `400`.
 
 ### 4.1 Single statement
 
@@ -105,6 +107,22 @@ Servers MAY reject batches that exceed a server-defined statement count with HTT
 > [issue #13](https://github.com/rafters-studio/http-sql/issues/13) and are deliberately out
 > of scope for this version.
 
+### 4.3 Describe
+
+```json
+{
+  "describe": "notes"
+}
+```
+
+- `describe` (REQUIRED, string) — the name of a table, as the database's catalogue records it. It is a name, not SQL: the server MUST NOT execute it, and a server that builds a catalogue query from it MUST bind it as a parameter or quote it as an identifier.
+
+A describe request asks the server for the shape of one table: its columns, their declared types, and its primary key. The server answers from its own catalogue (in SQLite, `PRAGMA table_info`; in PostgreSQL, `information_schema` or `pg_catalog`; whatever its engine keeps), so the client sends no engine-specific SQL and needs no permission to run catalogue statements. A server that refuses `PRAGMA` or reads of its system tables under its own policy (section 12.1) can still answer `describe`.
+
+A describe request carries no `params` and no `atomic`. It MUST NOT appear as an element of a `batch`; a batch element is a statement object (section 4.2).
+
+If the table does not exist, or exists but the token cannot see it, the server MUST return the error envelope (section 7) with `error.code` of `permission_error` and HTTP status `403`. The server MUST return the same response in both cases, so that `describe` does not tell a caller whether a table it cannot see exists. A client therefore cannot tell a missing table from a hidden one, and MUST NOT conclude from this error that the table is absent.
+
 ## 5. Parameter types
 
 Positional parameters use JSON values. Each JSON value MUST be bound as the server's corresponding SQL type:
@@ -156,7 +174,7 @@ HTTP status: `200`.
 }
 ```
 
-- `columns` (REQUIRED, array of strings) — the column names of the result, in the order produced by the SQL engine. Empty array for statements that produce no result set (INSERT, UPDATE, DELETE, DDL).
+- `columns` (REQUIRED, array of strings) — the column names of the result, in the order produced by the SQL engine. Empty array for statements that produce no result set (INSERT, UPDATE, DELETE, DDL). A SELECT produces a result set even when it matches no rows: `columns` MUST then carry the column names of that result set, and `rows` is empty. A client learns the shape of an empty result from `columns` alone.
 - `rows` (REQUIRED, array of arrays) — each inner array has the same length as `columns`, with values in column order. Values use the same JSON / tagged-value encoding as section 5, subject to the emission rules below. Empty array if no rows.
 - `rowsAffected` (REQUIRED, integer) — the number of rows changed by the statement. `0` for SELECT.
 - `lastInsertId` (OPTIONAL, string or null) — the identifier of the most recently inserted row when the server can determine it (typically the auto-increment id). Always a string, never a JSON number: when the identifier is an integer it is encoded as a decimal string, consistent with the `bigint` encoding in section 5, so 64-bit ids survive clients whose numbers are IEEE-754 doubles. Text identifiers (a UUID primary key, say) are carried as-is. `null` when not applicable or not available.
@@ -209,6 +227,29 @@ Given that, the two cases differ in what persists, and the difference is normati
 
 For a non-atomic batch failure the server MUST include `error.statementIndex` (section 7), because it is the only means by which a client can determine how far the batch got. No such obligation applies to an atomic batch failure: nothing persisted, so there is nothing for the client to locate.
 
+### 6.3 Describe
+
+HTTP status: `200`.
+
+```json
+{
+  "columns": [
+    {"name": "id",        "type": "INTEGER", "key": 1},
+    {"name": "tenant_id", "type": "TEXT",    "key": 0},
+    {"name": "body",      "type": null,      "key": 0}
+  ],
+  "generatedKey": true
+}
+```
+
+- `columns` (REQUIRED, array of column objects) — every column of the table, in declared order (the order of the table's definition, which is the order `SELECT *` produces). Each column object has:
+  - `name` (REQUIRED, string) — the column name.
+  - `type` (REQUIRED, string or null) — the column's declared type, as written in the table's definition or as the catalogue records it where the engine normalizes the spelling (for example `INTEGER`, `varchar(255)`, `timestamp with time zone`). Servers MUST NOT map it onto another type system, including the semantic types of section 5. `null` when the column was declared without a type, which SQLite permits.
+  - `key` (REQUIRED, integer) — the column's 1-based position in the table's primary key, or `0` when the column is not part of it. A single-column key has one column with `key` of `1`; a composite key numbers its columns `1`, `2`, and on, in the key's declared order, which need not match column order.
+- `generatedKey` (REQUIRED, boolean) — `true` when the database itself hands out the primary key value of a row inserted without one, `false` otherwise. Examples, non-normative: SQLite's `INTEGER PRIMARY KEY`, which aliases the rowid; PostgreSQL's `serial` and identity columns; MySQL's `AUTO_INCREMENT`. A table with no primary key column has every `key` at `0` and `generatedKey` of `false`.
+
+The column objects carry exactly these fields at this draft. Servers MAY add vendor-namespaced fields (`vendor:<name>`) to a column object or to the response; clients MUST ignore fields they do not recognize.
+
 ## 7. Error responses
 
 HTTP status: `4xx` or `5xx`.
@@ -235,7 +276,7 @@ Registered error codes in this draft:
 | `sql_error`              | 400  | The SQL is invalid or failed at runtime.                        |
 | `not_allowed`            | 400  | Statement shape is rejected by server policy.                   |
 | `auth_error`             | 401  | Missing or invalid credentials.                                 |
-| `permission_error`       | 403  | Authenticated but not permitted to run the statement.           |
+| `permission_error`       | 403  | Authenticated but not permitted to run the statement, or to describe the named table (section 4.3). |
 | `payload_too_large`      | 413  | Request body or result set exceeds a server limit.              |
 | `unsupported_media_type` | 415  | Request `Content-Type` media type is not `application/json`.    |
 | `rate_limited`           | 429  | Too many requests.                                              |
@@ -254,7 +295,7 @@ This draft does not define pagination. Servers SHOULD enforce a server-defined m
 Servers MUST include the response header:
 
 ```
-Http-Sql-Version: 0.0.1
+Http-Sql-Version: 0.0.2
 ```
 
 on every response (including error responses). Until `1.0` servers SHOULD also send the old name, `X-Http-Sql-Version`, with the same value, so existing clients keep working; the `X-` form is deprecated and will not be sent by `1.0` servers. [RFC 6648](https://www.rfc-editor.org/rfc/rfc6648) deprecates the `X-` prefix for new header fields.
@@ -262,7 +303,7 @@ on every response (including error responses). Until `1.0` servers SHOULD also s
 Clients MAY send the request header:
 
 ```
-Http-Sql-Accept-Version: 0.0.1
+Http-Sql-Accept-Version: 0.0.2
 ```
 
 to indicate the maximum spec version they understand. Servers MAY use this for forward-compatible behavior and MUST accept the deprecated `X-Http-Sql-Accept-Version` as a synonym until `1.0`. Servers at this draft ignore the header.
@@ -287,6 +328,7 @@ A server at this draft MAY:
 
 - Accept additional vendor-namespaced parameter types or error codes.
 - Accept the `QUERY` method as a read binding (section 2.1) and advertise it with `Accept-Query`.
+- Implement the `describe` request (section 4.3). A server that implements it MUST answer with the envelope in section 6.3, and with `permission_error` for a table it will not describe. A server that does not implement it MUST reject it with `bad_request` and `400`, as section 4 requires.
 - Apply tenancy, ACLs, row-level security, query whitelisting, or any other policy. http-sql is transport, not policy.
 
 ### 10.2 Clients
@@ -294,11 +336,12 @@ A server at this draft MAY:
 A client at this draft MUST:
 
 1. Send `Content-Type: application/json`.
-2. Send exactly one of `sql` or `batch` in the request body.
+2. Send exactly one of `sql`, `batch`, or `describe` in the request body.
 3. Use the standard parameter encoding from section 5.
 4. Handle the success and error envelopes from sections 6 and 7.
 5. On a non-atomic batch error, treat the statements preceding `error.statementIndex` as applied (section 6.2.1). A client MUST NOT assume no statements were applied.
 6. Not require any vendor-specific request or response fields beyond those defined here.
+7. Not assume a server implements `describe` (section 4.3). A `bad_request` in answer to a well-formed `describe` request means the server does not implement it; the client then has no shape from that server and MUST NOT treat the error as an empty table.
 
 A client at this draft SHOULD:
 
@@ -307,12 +350,13 @@ A client at this draft SHOULD:
 
 ## 11. Versioning policy
 
-This spec is at `0.0.1`. The first two drafts were numbered `0.1` and `0.2` before the spec had earned a number; that was premature, and the count restarted. Numbers below `0.1` mean thinking-stage: any part of the wire format may change, and no server or client should pin to it.
+This spec is at `0.0.2`. The first two drafts were numbered `0.1` and `0.2` before the spec had earned a number; that was premature, and the count restarted. Numbers below `0.1` mean thinking-stage: any part of the wire format may change, and no server or client should pin to it.
 
 From here: `<major>.<minor>.<patch>`. While the major is `0`, the patch increments on any edit to the draft, the minor increments when the shape has been dogfooded by a second, independent implementation, and `1.0` is the first number a server may build a product on. After `1.0`, breaking changes increment the major, additive changes (new optional fields, new registered types, new registered error codes) increment the minor, and editorial fixes increment the patch.
 
 ### Version history
 
+- **0.0.2** — optional `describe` request (section 4.3) and its response (section 6.3), so a client can learn a table's columns, declared types and primary key from any server that implements it without sending engine-specific SQL; a `describe` naming a table that does not exist or that the token cannot see answers `permission_error` (403), one response for both; section 6.1 now states that `columns` is REQUIRED for a SELECT that returns no rows. Additive to 0.0.1: a server that declines `describe` needs only to send the new version header and to fill `columns` on an empty SELECT.
 - **0.0.1** — the count restarted at thinking-stage. Edits in this draft: `application/http-sql+json` defined as the http-sql media type, with `application/json` accepted as a request alias (section 2); optional `QUERY` read binding with `Accept-Query` discovery (section 2.1); version headers renamed `Http-Sql-Version` / `Http-Sql-Accept-Version`, `X-` forms deprecated per RFC 6648 (section 9); recommended server policy added as non-normative section 12.1; IANA intent stated (section 13). All additive to the previous draft: a server that adds the two new response headers and accepts the new request media type needs nothing else.
 - **formerly 0.2** — batch failure behavior made normative (sequential non-atomic execution, `statementIndex` REQUIRED on non-atomic statement failures, preceding statements persist); response-side tagged-value emission MUSTs; `unsupported_media_type` registered (415); `lastInsertId` narrowed to string-or-null; `atomic` obligation unconditional; dialect-neutral parameter typing; `X-Http-Sql-Version` MUST.
 - **formerly 0.1** — initial draft.
@@ -324,6 +368,7 @@ http-sql carries arbitrary SQL strings. Servers MUST treat the SQL as untrusted 
 - A bearer token authenticates the caller but does not authorize arbitrary SQL. Servers SHOULD reject or rewrite statements that violate policy (tenancy, ACLs, allowlists) before execution.
 - SQL parameters are passed positionally and SHOULD be bound to prepared statements server-side. Servers MUST NOT interpolate parameters into the SQL string before binding.
 - Servers SHOULD enforce statement timeouts, result size limits, and rate limiting independent of the wire format.
+- A `describe` response (section 4.3) discloses a table's shape. A server SHOULD answer `describe` only for tables the token could also read with a SELECT, and MUST give the same `permission_error` response for a table that is hidden from the token as for one that does not exist.
 - A `QUERY` request (section 2.1) asserts to caches and intermediaries that the response is safe to reuse. A server that cannot tell whether a statement writes SHOULD treat that assertion as the client's responsibility and MUST NOT weaken its own authorization because the method was `QUERY`.
 
 The spec does not define encryption-at-rest or transport security. Implementations SHOULD use HTTPS.
